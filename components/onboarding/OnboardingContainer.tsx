@@ -16,7 +16,7 @@ const OnboardingContainer = () => {
 
   useEffect(() => {
     if (isComplete) {
-      router.push('/dashboard');
+      router.push('/');
     }
   }, [isComplete, router]);
 

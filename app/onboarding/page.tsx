@@ -17,7 +17,7 @@ export default function OnboardingPage() {
       if (!isAuthenticated) {
         router.push('/');
       } else if (isOnboardingComplete) {
-        router.push('/dashboard');
+        router.push('/');
       }
     }
   }, [isAuthenticated, isLoading, isOnboardingComplete, router]);

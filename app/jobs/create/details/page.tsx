@@ -41,6 +41,7 @@ export default function JobDetailsPage() {
   const [selectedJdId, setSelectedJdId] = useState<string>("");
   const [isLoadingJds, setIsLoadingJds] = useState(false);
   const [customDescription, setCustomDescription] = useState("");
+  const [titleError, setTitleError] = useState(false);
 
   useEffect(() => {
     // Get job_id from URL params or localStorage
@@ -164,6 +165,7 @@ export default function JobDetailsPage() {
 
   const saveJobDetails = async () => {
     if (!jobTitle) {
+      setTitleError(true);
       toast({
         title: "Missing information",
         description: "Please provide a job title",
@@ -172,6 +174,9 @@ export default function JobDetailsPage() {
       return;
     }
 
+    // Reset error state
+    setTitleError(false);
+    
     let finalTitle = jobTitle;
     let finalDescription = generatedDescription;
     let finalRequirements = jobRequirements;
@@ -293,16 +298,25 @@ export default function JobDetailsPage() {
   const renderJobDescriptionSelector = () => {
     return (
       <div className="space-y-4 px-3">
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
           <Label htmlFor="jobTitle" className="text-sm font-medium">Job Title <span className="text-red-500">*</span></Label>
           <Input
             id="jobTitle"
             placeholder="Enter job title"
             value={jobTitle}
-            onChange={(e) => setJobTitle(e.target.value)}
-            className="p-3"
+            onChange={(e) => {
+              setJobTitle(e.target.value);
+              if (e.target.value) setTitleError(false);
+            }}
+            className={`p-3 ${titleError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
             required
           />
+          {titleError && (
+            <div className="absolute -bottom-8 left-0 z-10 bg-red-100 border border-red-400 text-red-700 px-3 py-1 rounded-md text-xs shadow-sm">
+              Job title is required
+              <div className="absolute -top-1 left-4 w-2 h-2 bg-red-100 border-t border-l border-red-400 transform rotate-45"></div>
+            </div>
+          )}
         </div>
         
         <RadioGroup 
@@ -468,7 +482,7 @@ export default function JobDetailsPage() {
                 <button 
                   className="bg-indigo-500 hover:bg-indigo-600 text-white text-sm px-4 py-1 h-8 rounded-md" 
                   onClick={saveJobDetails}
-                  disabled={isSaving || !jobTitle}
+                  disabled={isSaving}
                 >
                   {isSaving ? "Finalizing..." : "Finalize Job Description"}
                 </button>
