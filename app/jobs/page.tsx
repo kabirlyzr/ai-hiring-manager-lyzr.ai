@@ -135,22 +135,24 @@ export default function JobsPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
             {jobs.map((job) => (
-              <Card key={job.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle>{job.job_title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {job.description.length > 100
-                      ? job.description.substring(0, 100) + '...'
-                      : job.description}
-                  </p>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <p className="text-xs text-muted-foreground">
+              <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200">
+                <div>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-semibold text-gray-800">{job.job_title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-600 line-clamp-3">
+                      {job.description.length > 150
+                        ? job.description.substring(0, 150) + '...'
+                        : job.description}
+                    </p>
+                  </CardContent>
+                </div>
+                <CardFooter className="flex justify-between items-center pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
                     Created: {new Date(job.created_at).toLocaleDateString()}
                   </p>
-                  <button className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md" onClick={() => handleViewJob(job.id)}>
+                  <button className="text-indigo-600 hover:text-indigo-800 text-sm font-medium" onClick={() => handleViewJob(job.id)}>
                     View Details
                   </button>
                 </CardFooter>

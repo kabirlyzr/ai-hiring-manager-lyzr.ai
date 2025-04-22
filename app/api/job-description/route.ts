@@ -2,7 +2,6 @@
 import { callLyzrAgent } from '@/utils/LyzrApiCall';
 import { NextRequest, NextResponse } from 'next/server';
 
-const LYZR_API_KEY = process.env.NEXT_PUBLIC_LYZR_API_KEY!;
 const AGENT_ID = process.env.NEXT_PUBLIC_AGENT_CHAT!;
 
 export async function POST(req: NextRequest) {
@@ -15,16 +14,20 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!LYZR_API_KEY || !AGENT_ID) {
-        console.log("Lyzr API key or Agent ID is not configured")
-        return NextResponse.json(
-            { error: 'Lyzr API key or Agent ID is not configured' },
-            { status: 500 }
-        );
+    
+    const token = req.cookies.get('token')?.value;
+    
+    if (!token || !AGENT_ID) {
+      console.log("API token from cookies or Agent ID is not configured");
+      return NextResponse.json(
+        { error: 'API token or Agent ID is not configured' },
+        { status: 500 }
+      );
     }
+    
     const response = await callLyzrAgent(
       message,
-      LYZR_API_KEY,
+      token,
       AGENT_ID,
       sessionId
     );

@@ -9,9 +9,7 @@ import { jobStorage } from '@/utils/supabase/jobStorage';
 import { EvaluationResult } from '@/types/types';
 
 const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
-const LYZR_API_KEY = process.env.NEXT_PUBLIC_LYZR_API_KEY;
 const EVALUATION_AGENT_ID = process.env.NEXT_PUBLIC_EVALUATION_AGENT_CHAT;
-// const MEETING_AGENT_ID = "6783fd5461f92e3cfefb0cd1";
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
@@ -19,7 +17,8 @@ async function processCandidate(
   file: File,
   fileId: string,
   jobDetails: any,
-  criteria: any[]
+  criteria: any[],
+  token: string
 ) {
   try {
     console.log(`Starting process for candidate with fileId: ${fileId}`);
@@ -39,7 +38,7 @@ async function processCandidate(
     console.log('Making first Lyzr agent call for evaluation...');
     const evaluationResponse = await callLyzrAgent(
       initialPrompt,
-      LYZR_API_KEY!,
+      token,
       EVALUATION_AGENT_ID!
     );
 
@@ -100,6 +99,16 @@ export async function POST(request: NextRequest) {
     const criteriaStr = formData.get('criteria') as string;
     const candidateFiles = formData.getAll('pdfs') as File[];
     const fileIds = formData.getAll('fileIds') as string[];
+    
+    const token = request.cookies.get('token')?.value;
+    
+    if (!token || !EVALUATION_AGENT_ID) {
+      console.error('API token from cookies or Evaluation Agent ID is not configured');
+      return NextResponse.json(
+        { error: 'API token or Evaluation Agent ID is not configured' },
+        { status: 500 }
+      );
+    }
 
     console.log('Received files count:', candidateFiles.length);
     console.log('File IDs:', fileIds);
@@ -127,7 +136,7 @@ export async function POST(request: NextRequest) {
         console.log('Starting batch processing of candidates...');
         const results = await Promise.all(
           candidateFiles.map((file, index) => 
-            processCandidate(file, fileIds[index], jobDetails, criteria)
+            processCandidate(file, fileIds[index], jobDetails, criteria, token)
           )
         );
         console.log('Batch processing completed');

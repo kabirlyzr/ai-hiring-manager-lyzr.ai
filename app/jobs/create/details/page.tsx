@@ -391,7 +391,10 @@ export default function JobDetailsPage() {
               id="customDescription"
               placeholder="Paste your job description here"
               value={customDescription}
-              onChange={(e) => setCustomDescription(e.target.value)}
+              onChange={(e) => {
+                setCustomDescription(e.target.value);
+                setGeneratedDescription(e.target.value);
+              }}
               rows={8}
               className="min-h-[200px] p-3"
             />
@@ -490,15 +493,15 @@ export default function JobDetailsPage() {
           </div>
           
           <Card className="p-4 bg-white border rounded-md shadow-sm h-[68vh] overflow-y-auto preview">
-            <div className="h-full  pr-2">
+            <div className="h-full pr-2">
               {((selectedOption === "existing" && selectedJdId) || 
-               (selectedOption === "custom" && customDescription) || 
-               generatedDescription) ? (
+                (selectedOption === "custom" && customDescription) || 
+                generatedDescription) ? (
                 <div className="text-sm leading-relaxed">
-                <ReactMarkdown>
-                  {generatedDescription}
-                </ReactMarkdown>
-              </div>
+                  <ReactMarkdown>
+                    {selectedOption === "custom" ? customDescription : generatedDescription}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500">
                   Job description will appear here
