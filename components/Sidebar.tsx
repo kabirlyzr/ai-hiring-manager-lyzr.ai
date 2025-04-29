@@ -2,15 +2,16 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { 
-  FileText, 
-  LayoutDashboard, 
-  Settings, 
-  ChevronRight, 
+import {
+  FileText,
+  LayoutDashboard,
+  Settings,
+  ChevronRight,
   PlusCircle,
   Menu,
   Book,
-  Search
+  Search,
+  LogOut
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,7 +32,7 @@ const sidebarItems = [
     path: "/job-descriptions",
   },
   {
-    title: "Apllicants Evaluator",
+    title: "Applicants Evaluator",
     icon: Search,
     path: "/jobs",
   },
@@ -43,9 +44,20 @@ const sidebarItems = [
 ];
 
 export function Sidebar() {
+  const router = useRouter();
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  
+
+  const handleLogout = async () => {
+    try {
+      const { default: lyzr } = await import("lyzr-agent");
+      await lyzr.logout();
+      window.location.reload()
+      router.push("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
   const isActive = (path: string) => {
     if (path === "/") {
       return pathname === "/";
@@ -67,14 +79,14 @@ export function Sidebar() {
           <div className="flex flex-col h-full">
             <div className="p-4 border-b">
               <div className="flex items-center gap-2">
-                <LogoIcon />
+                {/* <LogoIcon /> */}
                 <div className="flex flex-col">
-                  <span className="font-semibold text-sm">AI Hiring</span>
-                  <span className="font-bold text-lg -mt-1">Manager</span>
+                  {/* <span className="font-semibold text-sm"></span> */}
+                  <span className="font-bold text-lg -mt-1">AI Hiring Manager</span>
                 </div>
               </div>
             </div>
-            <nav className="flex-1 p-4">
+            <nav className="flex-1 p-4 justify-between">
               <ul className="space-y-2">
                 {sidebarItems.map((item) => (
                   <li key={item.path}>
@@ -94,6 +106,15 @@ export function Sidebar() {
                   </li>
                 ))}
               </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="flex items-center mr-4 "
+              >
+                <LogOut className="h-4 w-4 my-auto" />
+                <span>Logout</span>
+              </Button>
             </nav>
           </div>
         </SheetContent>
@@ -104,14 +125,14 @@ export function Sidebar() {
         <div className="px-4 py-4 border-b">
           <div className="flex items-center gap-2">
             <LogoIcon />
-            
-            <div className="flex flex-col border-l-2 border-gray-600 pl-2">
-              <span className="font-semibold text-lg">AI Hiring</span>
+
+            <div className="flex flex-col border-l-2  border-gray-600 pl-2">
+              <span className="font-bold text-lg ">AI Hiring</span>
               <span className="font-bold text-2xl -mt-3">Manager</span>
             </div>
           </div>
         </div>
-        <nav className="flex-1 p-4">
+        <nav className="flex-1 p-4 bg-gray-100 flex justify-between flex-col">
           <ul className="space-y-2">
             {sidebarItems.map((item) => (
               <li key={item.path}>
@@ -130,8 +151,17 @@ export function Sidebar() {
               </li>
             ))}
           </ul>
+          <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="flex items-center mr-4 "
+              >
+                <LogOut className="h-4 w-4 my-auto" />
+                <span>Logout</span>
+              </Button>
         </nav>
-       
+
       </div>
     </>
   );

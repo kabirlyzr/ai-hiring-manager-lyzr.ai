@@ -115,7 +115,7 @@ export default function ApplicantsEvaluationPage() {
     { text: "Assessing evaluation criteria...", duration: 8000 },
     { text: "Shortlisting candidates...", duration: 6000 },
     { text: "Checking the hiring manager's calendar...", duration: 4000 },
-    { text: "Scheduling the meeting...", duration: 15000 },
+    // { text: "Scheduling the meeting...", duration: 15000 },
   ];
 
   // Polling configuration constants

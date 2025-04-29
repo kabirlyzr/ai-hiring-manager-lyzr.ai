@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createServerSupabaseClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
-import { PlusCircle, FileText, Loader2 } from "lucide-react";
+import { PlusCircle, FileText, Loader2, Trash2 } from "lucide-react";
 import EmptySVG1 from "@/components/ui/emptySvg";
 
 interface Job {
@@ -104,6 +104,29 @@ export default function JobsPage() {
     }
   };
 
+  const handleDeleteJob = async (jobId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (confirm("Are you sure you want to delete this job?")) {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}`, {
+          method: 'DELETE',
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          setJobs(jobs.filter(job => job.id !== jobId));
+        } else {
+          alert("Failed to delete job");
+        }
+      } catch (error) {
+        console.error('Error deleting job:', error);
+        alert("An error occurred while deleting the job");
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto h-[80vh]">
       <div className="flex justify-between items-center mb-6">
@@ -135,7 +158,16 @@ export default function JobsPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
             {jobs.map((job) => (
-              <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200">
+              <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200 group relative">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button 
+                    onClick={(e) => handleDeleteJob(job.id, e)}
+                    className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600"
+                    aria-label="Delete job"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
                 <div>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg font-semibold text-gray-800">{job.job_title}</CardTitle>

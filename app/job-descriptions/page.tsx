@@ -282,19 +282,26 @@ export default function JobDescriptionsPage() {
     <div className="max-w-7xl mx-auto px-4 pt-8">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
-          {showCreateForm && (
+          {showCreateForm &&(
+            <>
             <a
               className="p-0 cursor-pointer my-auto"
               onClick={resetForm}
             >
               <ChevronLeft className="font-bold text-4xl hover:text-gray-500" />
             </a>
+             <h1 className="text-2xl font-bold">
+             Job Descriptions
+           </h1>
+            </>
           )}
+         { jobDescriptions.length > 0 && (
           <h1 className="text-2xl font-bold">
             Job Descriptions
           </h1>
+        )}
         </div>
-        {!showCreateForm && (
+        {!showCreateForm && jobDescriptions.length > 0 && (
           <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
             <PlusCircle size={16} />
             <span>Create Job Description</span>

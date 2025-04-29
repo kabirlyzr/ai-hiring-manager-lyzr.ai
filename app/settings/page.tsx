@@ -295,6 +295,54 @@ export default function SettingsPage() {
     setEditRecruiterOpen(true);
   };
   
+  const updateRecruiter = async () => {
+    if (!currentRecruiter.name || !currentRecruiter.id) {
+      toast({
+        title: "Required Field",
+        description: "Recruiter name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/recruiters/${currentRecruiter.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentRecruiter),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Recruiter updated successfully",
+        });
+        
+        // Update the recruiter in the state
+        setRecruiters(prev => 
+          prev.map(r => r.id === currentRecruiter.id ? {...currentRecruiter} : r)
+        );
+        setEditRecruiterOpen(false);
+      } else {
+        throw new Error(data.message || "Failed to update recruiter");
+      }
+    } catch (error) {
+      console.error('Error updating recruiter:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update recruiter",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+  
   const handleDeleteRecruiter = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this recruiter?")) {
       return;
@@ -705,7 +753,7 @@ export default function SettingsPage() {
                       <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                       </DialogClose>
-                      <Button onClick={addRecruiter} disabled={saving}>
+                      <Button onClick={updateRecruiter} disabled={saving}>
                         Save
                       </Button>
                     </div>

@@ -120,4 +120,60 @@ export async function PUT(
       error: 'Internal server error'
     }, { status: 500 });
   }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const cookieStore = await cookies();
+    const userId = cookieStore.get('user_id')?.value;
+    const {id} = await params
+    
+    if (!userId) {
+      return NextResponse.json({
+        success: false,
+        message: 'Authentication failed: Missing credentials',
+      }, { status: 401 });
+    }
+    
+    // Verify job belongs to user
+    const { data: jobData, error: jobError } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+      
+    if (jobError || !jobData) {
+      return NextResponse.json({
+        success: false,
+        message: 'Job not found or access denied',
+      }, { status: 404 });
+    }
+    
+    // Delete job
+    const { error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', id);
+      
+    if (error) {
+      throw error;
+    }
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Job deleted successfully'
+    }, { status: 200 });
+    
+  } catch (error) {
+    console.error('Error deleting job:', error);
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to delete job',
+      error: 'Internal server error'
+    }, { status: 500 });
+  }
 } 

@@ -14,6 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Book, Edit, PlusCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
+
 interface JobDescription {
   id: string;
   title: string;
@@ -237,9 +238,12 @@ export default function JobDetailsPage() {
           const newJobId = data.job.id;
           localStorage.setItem("activeJobId", newJobId);
           setJobId(newJobId);
+          router.push(`/jobs/create/criteria?jobId=${newJobId}`);
+        } else if (jobId) {
+          router.push(`/jobs/create/criteria?jobId=${jobId}`);
+        } else {
+          router.push('/jobs/create/criteria');
         }
-        
-        setIsEditing(false);
         
         toast({
           title: "Success",
@@ -484,7 +488,7 @@ export default function JobDetailsPage() {
                   onClick={saveJobDetails}
                   disabled={isSaving}
                 >
-                  {isSaving ? "Finalizing..." : "Finalize Job Description"}
+                  {isSaving ? "Finalizing..." : "Finalize and Continue"}
                 </button>
               )
             ) : (
@@ -511,8 +515,24 @@ export default function JobDetailsPage() {
               {((selectedOption === "existing" && selectedJdId) || 
                 (selectedOption === "custom" && customDescription) || 
                 generatedDescription) ? (
-                <div className="text-sm leading-relaxed">
-                  <ReactMarkdown>
+                <div className="text-sm leading-relaxed markdown-content">
+                  <ReactMarkdown
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-xl font-bold my-4" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-semibold my-3" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-md font-medium my-2" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc ml-5 my-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal ml-5 my-2" {...props} />,
+                      li: ({node, ...props}) => <li className="my-1" {...props} />,
+                      p: ({node, ...props}) => <p className="my-2" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 my-4 italic text-gray-700" {...props} />,
+                      a: ({node, ...props}) => <a className="text-indigo-600 hover:underline" {...props} />,
+                      strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                      em: ({node, ...props}) => <em className="italic" {...props} />,
+                      code: ({node, ...props}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm" {...props} />,
+                      pre: ({node, ...props}) => <pre className="bg-gray-100 p-4 rounded-md overflow-auto my-4" {...props} />
+                    }}
+                  >
                     {selectedOption === "custom" ? customDescription : generatedDescription}
                   </ReactMarkdown>
                 </div>

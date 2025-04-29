@@ -162,56 +162,63 @@ export function Navigation() {
     
     return (
       <div className="w-full border-b bg-white py-2">
-        <div className="container flex gap-6">
-          {jobSteps.map((step) => {
-            const isActive = pathname === step.path;
-            const isDisabled = 
-              (step.path === "/jobs/create/applicants" && (!isJobDescriptionComplete() || !isEvaluationCriteriaComplete())) ||
-              (step.path === "/jobs/create/criteria" && !isJobDescriptionComplete());
-            
-            let tooltipMessage = "";
-            if (step.path === "/jobs/create/applicants" && !isJobDescriptionComplete()) {
-              tooltipMessage = "Complete job description first";
-            } else if (step.path === "/jobs/create/applicants" && !isEvaluationCriteriaComplete()) {
-              tooltipMessage = "Complete evaluation criteria first";
-            } else if (step.path === "/jobs/create/criteria" && !isJobDescriptionComplete()) {
-              tooltipMessage = "Complete job description first";
-            }
-            
-            const stepContent = (
-              <div className={cn(
-                "py-2 px-4 text-sm transition-colors",
-                isActive ? "text-indigo-500 font-semibold border-b-2 border-indigo-500" : 
-                isDisabled ? "text-muted-foreground/40 cursor-not-allowed" : 
-                "text-muted-foreground hover:text-accent-foreground"
-              )}>
-                {step.title}
-              </div>
-            );
-            
-            if (isDisabled) {
-              return (
-                <TooltipProvider key={step.path}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="cursor-not-allowed">
-                        {stepContent}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{tooltipMessage}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+        <div className="container flex justify-between">
+          <div className="flex gap-6">
+            {jobSteps.map((step) => {
+              const isActive = pathname === step.path;
+              const isDisabled = 
+                (step.path === "/jobs/create/applicants" && (!isJobDescriptionComplete() || !isEvaluationCriteriaComplete())) ||
+                (step.path === "/jobs/create/criteria" && !isJobDescriptionComplete());
+              
+              let tooltipMessage = "";
+              if (step.path === "/jobs/create/applicants" && !isJobDescriptionComplete()) {
+                tooltipMessage = "Complete job description first";
+              } else if (step.path === "/jobs/create/applicants" && !isEvaluationCriteriaComplete()) {
+                tooltipMessage = "Complete evaluation criteria first";
+              } else if (step.path === "/jobs/create/criteria" && !isJobDescriptionComplete()) {
+                tooltipMessage = "Complete job description first";
+              }
+              
+              const stepContent = (
+                <div className={cn(
+                  "py-2 px-4 text-sm transition-colors",
+                  isActive ? "text-indigo-500 font-semibold border-b-2 border-indigo-500" : 
+                  isDisabled ? "text-muted-foreground/40 cursor-not-allowed" : 
+                  "text-muted-foreground hover:text-accent-foreground"
+                )}>
+                  {step.title}
+                </div>
               );
-            }
-            
-            return (
-              <Link key={step.path} href={step.path}>
-                {stepContent}
-              </Link>
-            );
-          })}
+              
+              if (isDisabled) {
+                return (
+                  <TooltipProvider key={step.path}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="cursor-not-allowed">
+                          {stepContent}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{tooltipMessage}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              }
+              
+              return (
+                <Link key={step.path} href={step.path}>
+                  {stepContent}
+                </Link>
+              );
+            })}
+          </div>
+          <Link href="/jobs" className="flex items-center">
+            <button className="py-2 px-4 text-sm text-indigo-600 hover:text-indigo-800 transition-colors">
+              Back to All Jobs
+            </button>
+          </Link>
         </div>
       </div>
     );

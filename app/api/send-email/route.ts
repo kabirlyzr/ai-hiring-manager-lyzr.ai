@@ -105,6 +105,10 @@ export async function POST(request: Request) {
         
         <p>We were impressed with your qualifications and would like to invite you for an interview.</p>
         
+        ${recruiterData.calendly_link ? `
+        <p><strong>Schedule your interview:</strong> <a href="${recruiterData.calendly_link}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Book a time slot</a></p>
+        ` : ''}
+        
         ${message ? `<p>${message}</p>` : ''}
         
         <p>If you have any questions, please don't hesitate to reach out.</p>
