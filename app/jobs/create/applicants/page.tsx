@@ -113,8 +113,9 @@ export default function ApplicantsEvaluationPage() {
     { text: "Reviewing resumes...", duration: 8000 },
     { text: "Understanding the job description...", duration: 8000 },
     { text: "Assessing evaluation criteria...", duration: 8000 },
-    { text: "Shortlisting candidates...", duration: 6000 },
-    { text: "Checking the hiring manager's calendar...", duration: 4000 },
+    { text: "Shortlisting candidates...", duration: 10000 },
+    { text: "Finalizing the results...", duration: 6000 },
+    // { text: "Checking the hiring manager's calendar...", duration: 4000 },
     // { text: "Scheduling the meeting...", duration: 15000 },
   ];
 
@@ -1129,7 +1130,7 @@ export default function ApplicantsEvaluationPage() {
             <button className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-md text-white">
               <label htmlFor="resume-upload" className="cursor-pointer">
                 <FileUp className="mr-2 h-4 w-4 inline" />
-                Upload Files
+                Select File
               </label>
             </button>
           </div>
@@ -1177,7 +1178,7 @@ export default function ApplicantsEvaluationPage() {
             ) : (
               <>
                 <FileUp className="mr-2 h-4 w-4" />
-                Upload Files
+                Select File
               </>
             )}
           </Button>
