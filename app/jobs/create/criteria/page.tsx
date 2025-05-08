@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 // import {
 //   Table, 
 //   TableBody, 
@@ -20,7 +20,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, Pencil, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { v4 as uuidv4 } from "uuid";
 
@@ -35,6 +35,7 @@ interface Criterion {
 export default function EvaluationCriteriaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [criteriaName, setCriteriaName] = useState("");
@@ -45,6 +46,21 @@ export default function EvaluationCriteriaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingCriterion, setIsAddingCriterion] = useState(false);
   const [isDeletingCriterion, setIsDeletingCriterion] = useState<string | null>(null);
+  const [editingCriterionId, setEditingCriterionId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{name: string; criteria: string; weightage: string}>({
+    name: "",
+    criteria: "",
+    weightage: "3"
+  });
+  const [isUpdatingCriterion, setIsUpdatingCriterion] = useState(false);
+  const [lastFetchedJobId, setLastFetchedJobId] = useState<string | null>(null);
+
+  // Store criteria in localStorage when it changes
+  useEffect(() => {
+    if (jobId && criteria.length > 0) {
+      localStorage.setItem(`criteria_${jobId}`, JSON.stringify(criteria));
+    }
+  }, [criteria, jobId]);
 
   useEffect(() => {
     // Get job_id from URL params or localStorage
@@ -56,7 +72,22 @@ export default function EvaluationCriteriaPage() {
     
     if (activeJobId) {
       setJobId(activeJobId);
-      fetchCriteria(activeJobId);
+      
+      // Check if we have cached criteria for faster UI response
+      const cachedCriteria = localStorage.getItem(`criteria_${activeJobId}`);
+      if (cachedCriteria) {
+        try {
+          setCriteria(JSON.parse(cachedCriteria));
+        } catch (e) {
+          console.error("Error parsing cached criteria", e);
+        }
+      }
+      
+      // Only fetch from server if we have a new job ID or we're returning to this page
+      if (activeJobId !== lastFetchedJobId) {
+        fetchCriteria(activeJobId);
+        setLastFetchedJobId(activeJobId);
+      }
       
       // Ensure the jobId is stored in localStorage
       if (paramJobId && (!storedJobId || storedJobId !== paramJobId)) {
@@ -71,7 +102,7 @@ export default function EvaluationCriteriaPage() {
       });
       router.push('/jobs/create/details');
     }
-  }, [searchParams]);
+  }, [searchParams, pathname]); // Added pathname dependency to refetch on navigation
 
   const fetchCriteria = async (id: string) => {
     setIsLoading(true);
@@ -86,6 +117,8 @@ export default function EvaluationCriteriaPage() {
       
       if (data.success) {
         setCriteria(data.criteria || []);
+        // Update cache
+        localStorage.setItem(`criteria_${id}`, JSON.stringify(data.criteria || []));
       } else {
         throw new Error(data.message || "Failed to fetch criteria");
       }
@@ -152,10 +185,21 @@ export default function EvaluationCriteriaPage() {
         
         // Update local state with the added criterion from server response
         if (data.criteria && data.criteria.length > 0) {
-          setCriteria([...criteria, ...data.criteria]);
+          // Use functional update to ensure we're working with the latest state
+          setCriteria(prevCriteria => {
+            const updated = [...prevCriteria, ...data.criteria];
+            // Update cache
+            if (jobId) localStorage.setItem(`criteria_${jobId}`, JSON.stringify(updated));
+            return updated;
+          });
         } else {
           // Fallback to our local representation if server doesn't return the new criteria
-          setCriteria([...criteria, newCriterion]);
+          setCriteria(prevCriteria => {
+            const updated = [...prevCriteria, newCriterion];
+            // Update cache
+            if (jobId) localStorage.setItem(`criteria_${jobId}`, JSON.stringify(updated));
+            return updated;
+          });
         }
         
         // Clear input fields
@@ -190,7 +234,12 @@ export default function EvaluationCriteriaPage() {
     setIsDeletingCriterion(id);
     try {
       // First update local state for immediate UI feedback
-      setCriteria(criteria.filter(c => c.id !== id));
+      setCriteria(prevCriteria => {
+        const updated = prevCriteria.filter(c => c.id !== id);
+        // Update cache
+        if (jobId) localStorage.setItem(`criteria_${jobId}`, JSON.stringify(updated));
+        return updated;
+      });
       
       // Then delete from database
       const response = await fetch(`/api/criteria/${id}`, {
@@ -222,6 +271,99 @@ export default function EvaluationCriteriaPage() {
       fetchCriteria(jobId);
     } finally {
       setIsDeletingCriterion(null);
+    }
+  };
+
+  const handleStartEdit = (criterion: Criterion) => {
+    setEditingCriterionId(criterion.id);
+    setEditForm({
+      name: criterion.name,
+      criteria: criterion.criteria,
+      weightage: criterion.weightage.toString()
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCriterionId(null);
+    setEditForm({
+      name: "",
+      criteria: "",
+      weightage: "3"
+    });
+  };
+
+  const handleUpdateCriterion = async () => {
+    if (!editingCriterionId || !jobId) return;
+    
+    if (!editForm.name.trim()) {
+      toast({
+        title: "Required Field",
+        description: "Criteria name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingCriterion(true);
+    
+    try {
+      const updatedCriterion = {
+        id: editingCriterionId,
+        name: editForm.name,
+        criteria: editForm.criteria,
+        weightage: parseInt(editForm.weightage),
+        job_id: jobId
+      };
+
+      const response = await fetch(`/api/criteria/${editingCriterionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ criterion: updatedCriterion }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update criterion: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state
+        setCriteria(prevCriteria => {
+          const updated = prevCriteria.map(c => 
+            c.id === editingCriterionId ? updatedCriterion : c
+          );
+          // Update cache
+          if (jobId) localStorage.setItem(`criteria_${jobId}`, JSON.stringify(updated));
+          return updated;
+        });
+        
+        // Clear edit state
+        setEditingCriterionId(null);
+        setEditForm({
+          name: "",
+          criteria: "",
+          weightage: "3"
+        });
+        
+        toast({
+          title: "Success",
+          description: "Criterion updated successfully",
+        });
+      } else {
+        throw new Error(data.message || "Failed to update criterion");
+      }
+    } catch (error) {
+      console.error("Error updating criterion:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update criterion",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingCriterion(false);
     }
   };
 
@@ -257,6 +399,7 @@ export default function EvaluationCriteriaPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-save-all": "true"
         },
         body: JSON.stringify({ criteria: criteriaWithJobId }),
       });
@@ -357,24 +500,91 @@ export default function EvaluationCriteriaPage() {
               
               {criteria.map((criterion) => (
                 <div key={criterion.id} className="grid grid-cols-3 gap-4 items-center py-3 px-4 border-b">
-                  <div className="col-span-1">
-                    {criterion.name}
-                  </div>
-                  <div className="col-span-1">
-                    {criterion.criteria}
-                  </div>
-                  <div className="col-span-1 flex justify-between items-center">
-                    {criterion.weightage}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveCriterion(criterion.id)}
-                      className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-transparent p-0"
-                      disabled={isDeletingCriterion === criterion.id}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {editingCriterionId === criterion.id ? (
+                    <>
+                      <div className="col-span-1">
+                        <Input 
+                          value={editForm.name}
+                          onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Input 
+                          value={editForm.criteria}
+                          onChange={(e) => setEditForm({...editForm, criteria: e.target.value})}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-between items-center">
+                        <Select 
+                          value={editForm.weightage} 
+                          onValueChange={(value) => setEditForm({...editForm, weightage: value})}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleUpdateCriterion}
+                            className="h-6 w-6 text-green-500 hover:text-green-700 hover:bg-transparent p-0"
+                            disabled={isUpdatingCriterion}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleCancelEdit}
+                            className="h-6 w-6 text-gray-500 hover:text-gray-700 hover:bg-transparent p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="col-span-1">
+                        {criterion.name}
+                      </div>
+                      <div className="col-span-1">
+                        {criterion.criteria}
+                      </div>
+                      <div className="col-span-1 flex justify-between items-center">
+                        {criterion.weightage}
+                        <div className="flex items-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleStartEdit(criterion)}
+                            className="h-6 w-6 text-blue-500 hover:text-blue-700 hover:bg-transparent p-0 mr-2"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveCriterion(criterion.id)}
+                            className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-transparent p-0"
+                            disabled={isDeletingCriterion === criterion.id}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

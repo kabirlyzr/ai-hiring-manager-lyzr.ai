@@ -71,31 +71,51 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    // Delete existing criteria for this job
-    const jobId = criteria[0].job_id;
-    if (jobId) {
-      await supabase
+    // Check for operation type - single add or bulk save
+    const isSingleCriterion = criteria.length === 1 && !request.headers.get('x-save-all');
+    
+    if (isSingleCriterion) {
+      // Adding a single criterion - don't delete existing ones
+      const { data, error } = await supabase
         .from('criteria')
-        .delete()
-        .eq('job_id', jobId);
-    }
-    
-    // Insert new criteria
-    const { data, error } = await supabase
-      .from('criteria')
-      .insert(criteria)
-      .select();
+        .insert(criteria)
+        .select();
+        
+      if (error) {
+        throw error;
+      }
       
-    if (error) {
-      throw error;
+      return NextResponse.json({
+        success: true,
+        message: 'Criterion added successfully',
+        criteria: data
+      }, { status: 201 });
+    } else {
+      // Bulk saving all criteria - replace existing ones
+      const jobId = criteria[0].job_id;
+      if (jobId) {
+        await supabase
+          .from('criteria')
+          .delete()
+          .eq('job_id', jobId);
+      }
+      
+      // Insert new criteria
+      const { data, error } = await supabase
+        .from('criteria')
+        .insert(criteria)
+        .select();
+        
+      if (error) {
+        throw error;
+      }
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Criteria saved successfully',
+        criteria: data
+      }, { status: 201 });
     }
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Criteria saved successfully',
-      criteria: data
-    }, { status: 201 });
-    
   } catch (error) {
     console.error('Error saving criteria:', error);
     return NextResponse.json({
