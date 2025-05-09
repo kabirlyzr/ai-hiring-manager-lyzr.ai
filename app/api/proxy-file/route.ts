@@ -23,12 +23,16 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
     
+    console.log(`Proxy file request for URL: ${url}`);
+    
     // Extract bucket and key from the S3 URL
     // Assuming URL format: https://bucket-name.s3.region.amazonaws.com/path/to/file
     const urlObj = new URL(url);
     const hostParts = urlObj.hostname.split('.');
     const bucketName = hostParts[0];
     const key = urlObj.pathname.substring(1); // Remove the leading slash
+    
+    console.log(`Extracting file from S3: bucket=${bucketName}, key=${key}`);
     
     // Get the file from S3
     const command = new GetObjectCommand({
@@ -39,7 +43,7 @@ export async function GET(request: NextRequest) {
     const response = await s3Client.send(command);
     
     if (!response.Body) {
-      throw new Error('Failed to fetch file from S3');
+      throw new Error('Failed to fetch file from S3: Body is empty');
     }
     
     // Read the file data
@@ -50,15 +54,26 @@ export async function GET(request: NextRequest) {
     }
     const buffer = Buffer.concat(chunks);
     
-    // Determine content type
-    const contentType = response.ContentType || 'application/octet-stream';
+    // Determine content type and filename
+    const contentType = response.ContentType || 'application/pdf';
+    
+    // Extract meaningful filename, defaulting to key
+    let filename = key.split('/').pop() || 'resume.pdf';
+    
+    // Ensure the filename has an extension if it doesn't have one
+    if (!filename.includes('.')) {
+      filename = `${filename}.pdf`;
+    }
+    
+    console.log(`Successfully fetched file: ${filename}, size: ${buffer.length} bytes, type: ${contentType}`);
     
     // Return the file with appropriate headers
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="${key.split('/').pop()}"`,
+        'Content-Disposition': `inline; filename="${filename}"`,
+        'Cache-Control': 'no-cache',
       }
     });
     

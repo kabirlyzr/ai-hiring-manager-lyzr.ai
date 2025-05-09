@@ -143,6 +143,47 @@ class JobStorage {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async appendResultWithStatus(id: string, newResult: any, status: "processing" | "completed" | "failed"): Promise<boolean> {
+    console.log(`Appending results to job ID: ${id} with status: ${status}`);
+    
+    try {
+      // Get the current results array
+      const { data, error: fetchError } = await supabase
+        .from("batch_jobs")
+        .select("results")
+        .eq("id", id)
+        .single();
+
+      if (fetchError || !data) {
+        console.error("Error fetching existing results:", fetchError);
+        console.error("Error details:", JSON.stringify(fetchError, null, 2));
+        return false;
+      }
+
+      const updatedResults = [...data.results, ...newResult]; // Append new result
+      console.log("Updating with new results, total count:", updatedResults.length);
+
+      // Update the job with the new results array and specified status
+      const { error } = await supabase
+        .from("batch_jobs")
+        .update({ results: updatedResults, status, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) {
+        console.error("Error updating results:", error);
+        console.error("Error details:", JSON.stringify(error, null, 2));
+        return false;
+      }
+      
+      console.log("Results appended successfully with status:", status);
+      return true;
+    } catch (e) {
+      console.error("Exception in appendResultWithStatus:", e);
+      return false;
+    }
+  }
+
   async deleteJob(id: string): Promise<boolean> {
     console.log("Deleting job with ID:", id);
     

@@ -121,8 +121,8 @@ export default function ApplicantsEvaluationPage() {
 
   // Polling configuration constants
   const MAX_RETRY_ATTEMPTS = 3;
-  const POLLING_INTERVAL = 5000;
-  const MAX_POLLING_ATTEMPTS = 60;
+  const POLLING_INTERVAL = 3000;
+  const MAX_POLLING_ATTEMPTS = 90;
 
   useEffect(() => {
     const fetchJobDetails = async (id: string) => {
@@ -462,10 +462,13 @@ export default function ApplicantsEvaluationPage() {
     }
   };
 
-  // Polling function for evaluation status
   const pollResults = async (jobId: string): Promise<any[]> => {
     let attempts = 0;
-  
+    let previousResultCount = 0;
+    let noProgressCount = 0;
+    const MAX_NO_PROGRESS = 10; // How many polling attempts with no new results before we warn
+    let extractionErrors = 0;
+    
     while (attempts < MAX_POLLING_ATTEMPTS) {
       try {
         const response = await fetch(`/api/evaluate/status?jobId=${jobId}`);
@@ -473,28 +476,140 @@ export default function ApplicantsEvaluationPage() {
   
         const data = await response.json();
         
-        if (data.status === 'completed' && Array.isArray(data.result)) {
-          const results = data.result.map((result: any) => ({
-            ...result,
-            fileId: result.fileId || ''
-          }));
+        // Check if there are errors in the job
+        if (data.error) {
+          try {
+            const errors = JSON.parse(data.error);
+            if (Array.isArray(errors) && errors.length > 0) {
+              // Count different types of errors for better reporting
+              const pdfErrors = errors.filter((e: string) => e.includes('PDF') || e.includes('pdf'));
+              if (pdfErrors.length > 0) {
+                extractionErrors += pdfErrors.length;
+                console.warn(`${pdfErrors.length} PDF extraction errors detected`);
+              }
+              
+              // Display a toast with the error summary
+              toast({
+                title: "Processing Issues",
+                description: `Some files may have errors: ${pdfErrors.length > 0 ? `${pdfErrors.length} PDF extraction issues` : errors[0]}`,
+                variant: "destructive"
+              });
+            }
+          } catch (e) {
+            // Not a JSON error, just log it
+            console.error(`Error in job: ${data.error}`);
+          }
+        }
+  
+        // If job is completed or has an error, return results
+        if (data.status === 'completed' || data.status === 'error') {
+          const results = data.result || [];
+          
+          // Check for PDF extraction issues and notify user
+          const extractionFailures = results.filter((r: any) => 
+            (r.reason && r.reason.toLowerCase().includes('pdf extraction')) || 
+            (r.criteria && r.criteria.some((c: any) => c.reason && c.reason.toLowerCase().includes('pdf extraction')))
+          );
+          
+          if (extractionFailures.length > 0) {
+            toast({
+              title: "PDF Extraction Issues",
+              description: `${extractionFailures.length} out of ${results.length} resumes had PDF extraction issues. The evaluation was based on limited information.`,
+              variant: "default"
+            });
+          }
           
           return results;
         }
   
-        if (data.status === 'failed') {
-          throw new Error(data.error || 'Evaluation failed');
+        // If still processing, check progress
+        if (data.status === 'processing' && data.result) {
+          const currentResultCount = data.result.length;
+          
+          // If we have new results, reset the no progress counter
+          if (currentResultCount > previousResultCount) {
+            previousResultCount = currentResultCount;
+            noProgressCount = 0;
+            
+            // Check if the new results have PDF extraction issues
+            const newResults = data.result.slice(previousResultCount);
+            const pdfIssuesCount = newResults.filter((r: any) => 
+              (r.reason && r.reason.toLowerCase().includes('pdf extraction')) || 
+              (r.criteria && r.criteria.some((c: any) => c.reason && c.reason.toLowerCase().includes('pdf extraction')))
+            ).length;
+            
+            if (pdfIssuesCount > 0) {
+              extractionErrors += pdfIssuesCount;
+            }
+          } else {
+            noProgressCount++;
+          }
+          
+          // If we've been stuck with no progress for a while, warn the user
+          if (noProgressCount >= MAX_NO_PROGRESS) {
+            toast({
+              title: "Processing slowly",
+              description:  `PDF extraction issues detected.`,
+              variant: "default"
+            });
+            noProgressCount = 0; // Reset to avoid spamming
+          }
+          
+          // If we have partial results and have been polling for a while, return them
+          if (currentResultCount > 0 && attempts > MAX_POLLING_ATTEMPTS / 2) {
+            toast({
+              title: "Partial Results Available",
+              description: `Showing ${currentResultCount} out of ${candidates.length} results while processing continues.`,
+              variant: "default"
+            });
+            return data.result;
+          }
         }
-  
+        
+        // Wait before polling again
         await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         attempts++;
       } catch (error) {
-        if (error instanceof Error && error.message === 'JOB_NOT_FOUND') throw error;
+        console.error('Error polling job status:', error);
+        
+        // If we've been polling for a while and have an error, just stop and show what we have
+        if (attempts > MAX_POLLING_ATTEMPTS / 2) {
+          toast({
+            title: "Error checking job status",
+            description: "Showing available results. Some candidates may not be evaluated.",
+            variant: "destructive"
+          });
+          
+          // Try one more time to get partial results
+          try {
+            const finalResponse = await fetch(`/api/evaluate/status?jobId=${jobId}`);
+            const finalData = await finalResponse.json();
+            if (finalData.result && finalData.result.length > 0) {
+              return finalData.result;
+            }
+          } catch (fetchError) {
+            // Ignore this error
+            console.error("Error getting final results:", fetchError);
+          }
+          
+          return [];
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         attempts++;
-        if (attempts === MAX_POLLING_ATTEMPTS) throw new Error('Polling timed out');
       }
     }
-    throw new Error('Polling timed out');
+    
+    // If we reach max attempts, return whatever results we have
+    try {
+      const response = await fetch(`/api/evaluate/status?jobId=${jobId}`);
+      const data = await response.json();
+      return data.result || [];
+    } catch (error) {
+      console.error('Final attempt to get results failed:', error);
+      return [];
+    }
   };
 
   const evaluateCandidates = async () => {
@@ -528,6 +643,19 @@ export default function ApplicantsEvaluationPage() {
     setIsEvaluating(true);
     
     try {
+      // Show a detailed toast about processing
+      toast({
+        title: "Processing Resumes",
+        description: `Evaluating ${candidates.length} resumes. This may take a few minutes.`,
+      });
+      
+      // Get userId from client-side cookies 
+      const userId = Cookies.get('user_id');
+      
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
+      
       // Create form data for API call
       const formData = new FormData();
       
@@ -550,6 +678,7 @@ export default function ApplicantsEvaluationPage() {
         // Add to formData
         formData.append('pdfs', file);
         formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
+        formData.append('candidateNames', candidate.name || ''); // Add candidate names
       });
       
       // Wait for all candidates to be processed
@@ -633,7 +762,9 @@ export default function ApplicantsEvaluationPage() {
         if (matchingResult) {
           return {
             ...candidate,
-            name: matchingResult.name
+            name: matchingResult.name && matchingResult.name !== "undefined" && matchingResult.name !== "Unknown Candidate" 
+              ? matchingResult.name 
+              : candidate.name || matchingResult.name
           };
         }
         return candidate;
@@ -764,6 +895,14 @@ export default function ApplicantsEvaluationPage() {
     setDetailsDialogOpen(true);
   };
 
+  const handleDropAreaClick = () => {
+    const uploadId = uploadDialogOpen ? 'modal-resume-upload' : 'resume-upload';
+    const element = document.getElementById(uploadId);
+    if (element) {
+      element.click();
+    }
+  };
+
   // Upload Dialog Component
   const renderUploadDialog = () => {
     return (
@@ -781,7 +920,7 @@ export default function ApplicantsEvaluationPage() {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() => document.getElementById('modal-resume-upload')?.click()}
+              onClick={handleDropAreaClick}
             >
               <Upload className="h-10 w-10 text-gray-400 mb-2" />
               <p className="text-sm text-center mb-2">
@@ -1106,7 +1245,7 @@ export default function ApplicantsEvaluationPage() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => document.getElementById('resume-upload')?.click()}
+          onClick={handleDropAreaClick}
         >
           <Upload className="h-10 w-10 text-gray-400 mb-2" />
           <p className="text-sm text-center mb-2">
@@ -1135,7 +1274,7 @@ export default function ApplicantsEvaluationPage() {
             </button>
           </div>
         ) : pendingFiles.length > 0 && !uploadingFiles && (
-          <div className="text-center">
+          <div className="text-center flex flex-col items-center gap-3">
             <button 
               onClick={() => handleFiles(pendingFiles as unknown as FileList)} 
               className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-md text-white"
@@ -1143,6 +1282,20 @@ export default function ApplicantsEvaluationPage() {
               <FileUp className="mr-2 h-4 w-4 inline" />
               Upload {pendingFiles.length} file(s)
             </button>
+            <button 
+              onClick={handleDropAreaClick}
+              className="text-indigo-500 hover:text-indigo-600 text-sm"
+            >
+              Add more files
+            </button>
+            <input
+              type="file"
+              id="resume-upload"
+              multiple
+              accept=".pdf,.doc,.docx"
+              className="hidden"
+              onChange={handleFileInput}
+            />
           </div>
         )}
         
