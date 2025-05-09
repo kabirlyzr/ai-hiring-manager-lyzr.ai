@@ -541,6 +541,9 @@ export default function JobDescriptionsPage() {
                       size="sm"
                       className="text-xs h-7"
                       onClick={() => {
+                        localStorage.removeItem('activeJobId');
+                        localStorage.removeItem('jobFormData');
+                        localStorage.removeItem('formProgress');
                         localStorage.setItem('selectedJobDescription', JSON.stringify(jd));
                         router.push('/jobs/create/details');
                       }}
