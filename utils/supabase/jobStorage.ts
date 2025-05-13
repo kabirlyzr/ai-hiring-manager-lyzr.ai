@@ -120,7 +120,15 @@ class JobStorage {
         return false;
       }
 
-      const updatedResults = [...data.results, ...newResult]; // Append new result
+      // Create a map of existing fileIds to detect duplicates
+      const existingFileIds = new Set(data.results.map((result: { fileId: string }) => result.fileId));
+      
+      // Filter out any new results that already exist
+      const uniqueNewResults = Array.isArray(newResult) 
+        ? newResult.filter((result: { fileId: string }) => !existingFileIds.has(result.fileId))
+        : newResult;
+      
+      const updatedResults = [...data.results, ...(Array.isArray(uniqueNewResults) ? uniqueNewResults : [uniqueNewResults])];
       console.log("Updating with new results, total count:", updatedResults.length);
 
       // Update the job with the new results array
@@ -161,7 +169,15 @@ class JobStorage {
         return false;
       }
 
-      const updatedResults = [...data.results, ...newResult]; // Append new result
+      // Create a map of existing fileIds to detect duplicates
+      const existingFileIds = new Set(data.results.map((result: { fileId: string }) => result.fileId));
+      
+      // Filter out any new results that already exist
+      const uniqueNewResults = Array.isArray(newResult) 
+        ? newResult.filter((result: { fileId: string }) => !existingFileIds.has(result.fileId))
+        : newResult;
+      
+      const updatedResults = [...data.results, ...(Array.isArray(uniqueNewResults) ? uniqueNewResults : [uniqueNewResults])];
       console.log("Updating with new results, total count:", updatedResults.length);
 
       // Update the job with the new results array and specified status

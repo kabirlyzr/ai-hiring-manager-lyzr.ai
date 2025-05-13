@@ -321,44 +321,59 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`Starting sequential PDF extraction for ${candidateFiles.length} files`);
         
-        // Prepare storage for extracted data and results
-        const candidateData = [];
+        // Create arrays to store the results and errors
         const allResults = [];
         const allErrors = [];
         
-        // Process files one-by-one with more careful handling
+        // Keep track of candidate IDs to ensure uniqueness
+        const processedFileIds = new Set();
+        
+        // Process each resume
+        const candidateData = [];
+        console.log(`[PDF PROCESS] Starting to process ${candidateFiles.length} files`);
+        
+        // First pass: identify unique file IDs to process
+        const uniqueCandidateFiles = [];
+        const uniqueFileIds = new Set();
+        
         for (let i = 0; i < candidateFiles.length; i++) {
-          const file = candidateFiles[i];
           const fileId = fileIds[i];
-          const candidateName = candidateNames[i] || "";
-          
-          console.log(`------------------------------------------`);
-          console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Processing file: ${fileId}`);
+          if (!uniqueFileIds.has(fileId)) {
+            uniqueFileIds.add(fileId);
+            uniqueCandidateFiles.push({
+              file: candidateFiles[i],
+              fileId: fileId,
+              candidateName: candidateNames[i] || ""
+            });
+          } else {
+            console.log(`[PDF PROCESS] Skipping duplicate file with ID: ${fileId}`);
+          }
+        }
+        
+        console.log(`[PDF PROCESS] Reduced ${candidateFiles.length} files to ${uniqueCandidateFiles.length} unique files`);
+        
+        // Second pass: process only unique files
+        for (let i = 0; i < uniqueCandidateFiles.length; i++) {
+          const { file, fileId, candidateName } = uniqueCandidateFiles[i];
           
           try {
-            // Ensure the file has a name (critical for extraction)
+            // Ensure file has a name and type
             if (!file.name) {
-              console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] File missing name, assigning one`);
-              const tempName = candidateName 
-                ? `${candidateName.replace(/\s+/g, '-')}.pdf`
-                : `resume-${fileId.substring(0, 8)}.pdf`;
-                
-              Object.defineProperty(file, 'name', {
-                writable: true,
-                value: tempName
-              });
+              const tempName = `resume-${fileId.substring(0, 8)}.pdf`;
+              console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] File missing name, assigning: ${tempName}`);
+              Object.defineProperty(file, 'name', { writable: true, value: tempName });
             }
             
             // Ensure the file has a type
             if (!file.type) {
-              console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] File missing type, setting to PDF`);
+              console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] File missing type, setting to PDF`);
               Object.defineProperty(file, 'type', {
                 writable: true,
                 value: 'application/pdf'
               });
             }
             
-            console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Starting PDF extraction for: ${file.name}, size: ${file.size} bytes`);
+            console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Starting PDF extraction for: ${file.name}, size: ${file.size} bytes`);
             
             // Extract text with multiple retries
             let pdfText = "";
@@ -369,11 +384,11 @@ export async function POST(request: NextRequest) {
             while (retryCount <= MAX_RETRIES) {
               try {
                 pdfText = await extractTextFromPDF(file);
-                console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] PDF Text extraction attempt #${retryCount+1} completed`);
+                console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] PDF Text extraction attempt #${retryCount+1} completed`);
                 
                 // Check if extraction failed but we got a fallback message
                 if (pdfText.includes('[PDF EXTRACTION FAILED]')) {
-                  console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] PDF extraction returned failure message (${pdfText.length} chars)`);
+                  console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] PDF extraction returned failure message (${pdfText.length} chars)`);
                   extractionFailed = true;
                   
                   // No retry needed since we're getting a clear failure message
@@ -382,41 +397,24 @@ export async function POST(request: NextRequest) {
                   // Successful extraction
                   extractionFailed = false;
                   const textPreview = pdfText.substring(0, 150).replace(/\n/g, ' ');
-                  console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Successful extraction: ${pdfText.length} chars`);
-                  console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Text preview: ${textPreview}...`);
+                  console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Successful extraction: ${pdfText.length} chars`);
+                  console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Text preview: ${textPreview}...`);
                   break;
                 }
               } catch (error: any) {
-                console.error(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Error in extraction attempt #${retryCount+1}:`, error);
+                console.error(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Error in extraction attempt #${retryCount+1}:`, error);
                 extractionFailed = true;
                 
                 if (retryCount === MAX_RETRIES) {
-                  console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] All extraction attempts failed`);
+                  console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] All extraction attempts failed`);
                   pdfText = `[PDF Extraction Failed] Could not extract text from resume. Error: ${error.message || "Unknown error"}`;
                   break;
                 }
                 
                 retryCount++;
-                console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Retrying extraction (attempt ${retryCount+1}/${MAX_RETRIES+1})...`);
+                console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Retrying extraction (attempt ${retryCount+1}/${MAX_RETRIES+1})...`);
                 // Short delay before retry
                 await new Promise(resolve => setTimeout(resolve, 100));
-              }
-            }
-            
-            // Determine final candidate name with clear priority
-            let finalCandidateName = candidateName || "";
-            
-            if (!finalCandidateName) {
-              // First try to extract from filename if present
-              if (file.name) {
-                finalCandidateName = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').replace(/-/g, ' ').trim();
-                console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Using filename for candidate name: ${finalCandidateName}`);
-              }
-              
-              // If still no name, use fileId
-              if (!finalCandidateName) {
-                finalCandidateName = `Candidate-${fileId.substring(0, 8)}`;
-                console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Using fileId for candidate name: ${finalCandidateName}`);
               }
             }
             
@@ -424,16 +422,16 @@ export async function POST(request: NextRequest) {
             candidateData.push({
               fileId,
               fileName: file.name,
-              candidateName: finalCandidateName,
+              candidateName: candidateName,
               pdfText,
               extractionFailed,
               file
             });
             
-            console.log(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Successfully processed candidate: ${finalCandidateName}`);
+            console.log(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Successfully processed candidate: ${candidateName}`);
             
           } catch (processingError: any) {
-            console.error(`[PDF PROCESS][${i+1}/${candidateFiles.length}] Failed to process file:`, processingError);
+            console.error(`[PDF PROCESS][${i+1}/${uniqueCandidateFiles.length}] Failed to process file:`, processingError);
             
             // Still add to candidateData with error info so we can evaluate with limited data
             candidateData.push({
@@ -460,7 +458,7 @@ This resume could not be properly processed due to technical issues with the fil
           }
           
           // Small delay between files to avoid resource contention
-          if (i < candidateFiles.length - 1) {
+          if (i < uniqueCandidateFiles.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 200));
           }
         }
