@@ -558,9 +558,9 @@ export default function ApplicantsEvaluationPage() {
       }));
       
       formData.append('criteria', JSON.stringify(criteria.map(c => ({
-        name: c.name,
-        description: c.description,
-        weight: c.weightage
+        name: c.name || c.criteria,
+        description: c.description || c.criteria,
+        weight: c.weight || c.weightage
       }))));
       
       // Call the evaluation API
@@ -592,7 +592,10 @@ export default function ApplicantsEvaluationPage() {
           
           // Create criteria results array
           const criteriaResults = result.criteria.map((criterion: any) => ({
-            criteria_id: criteria.find(c => c.name === criterion.criteria)?.id || '',
+            criteria_id: criteria.find(c => 
+              c.name === criterion.criteria || 
+              c.criteria === criterion.criteria
+            )?.id || '',
             score: criterion.score,
             comments: criterion.reason,
             criteria: criterion.criteria
@@ -1156,9 +1159,9 @@ export default function ApplicantsEvaluationPage() {
       }));
       
       formData.append('criteria', JSON.stringify(criteria.map(c => ({
-        name: c.name,
-        description: c.description,
-        weight: c.weightage
+        name: c.name || c.criteria,
+        description: c.description || c.criteria,
+        weight: c.weight || c.weightage
       }))));
       
       // Call the evaluation API
@@ -1184,7 +1187,10 @@ export default function ApplicantsEvaluationPage() {
           
           // Create criteria results array
           const criteriaResults = result.criteria.map((criterion: any) => ({
-            criteria_id: criteria.find(c => c.name === criterion.criteria)?.id || '',
+            criteria_id: criteria.find(c => 
+              c.name === criterion.criteria || 
+              c.criteria === criterion.criteria
+            )?.id || '',
             score: criterion.score,
             comments: criterion.reason,
             criteria: criterion.criteria
@@ -1832,7 +1838,9 @@ export default function ApplicantsEvaluationPage() {
                     let criterionName = 'Criterion';
                     
                     if (result.criteria_id && criteria.find(c => c.id === result.criteria_id)) {
-                      criterionName = criteria.find(c => c.id === result.criteria_id)?.criteria || 'Criterion';
+                      criterionName = criteria.find(c => c.id === result.criteria_id)?.criteria || 
+                                      criteria.find(c => c.id === result.criteria_id)?.name || 
+                                      'Criterion';
                     }
                     
                     return (
