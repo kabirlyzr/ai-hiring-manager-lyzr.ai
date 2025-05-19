@@ -22,6 +22,7 @@ interface UserData {
   user_id: string;
   is_onboarded: boolean;
   is_new_user?: boolean;
+  tour_completed?: boolean;
 }
 
 interface AuthContextType {
@@ -29,6 +30,7 @@ interface AuthContextType {
   isLoading: boolean;
   isOnboarded: boolean;
   isNewUser: boolean;
+  tourCompleted: boolean;
   userId: string | null;
   token: string | null;
   checkAuth: () => Promise<void>;
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [tourCompleted, setTourCompleted] = useState(false);
   const dispatch = useDispatch();
 
   const checkAuth = async () => {
@@ -77,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = data.user as UserData;
           setIsOnboarded(userData.is_onboarded);
           setIsNewUser(userData.is_new_user || false);
+          setTourCompleted(userData.tour_completed || false);
           
           // Sync database isOnboarded state to Redux
           if (userData.is_onboarded) {
@@ -107,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setIsOnboarded(false);
     setIsNewUser(false);
+    setTourCompleted(false);
     Cookies.remove("user_id");
     Cookies.remove("token");
     router.push("/");
@@ -147,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading, 
         isOnboarded,
         isNewUser,
+        tourCompleted,
         userId, 
         token, 
         checkAuth 

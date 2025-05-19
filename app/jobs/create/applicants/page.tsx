@@ -1721,11 +1721,13 @@ export default function ApplicantsEvaluationPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Final Score</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Meeting Scheduled</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead className="text-center">Name</TableHead>
+              <TableHead className="text-center">Final Score</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-center">Meeting Scheduled</TableHead>
+              <TableHead className="text-center">Evaluation</TableHead>
+              <TableHead className="text-center">Resume</TableHead>
+              <TableHead className="text-center">Schedule</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1735,11 +1737,11 @@ export default function ApplicantsEvaluationPage() {
               
               return (
                 <TableRow key={evaluation.id}>
-                  <TableCell className="font-medium">{displayName}</TableCell>
-                  <TableCell>{evaluation.final_score || evaluation["Final score"] || "-"}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-center">{displayName}</TableCell>
+                  <TableCell className="text-center">{evaluation.final_score || evaluation["Final score"] || "-"}</TableCell>
+                  <TableCell className="text-center">
                     <span className={cn(
-                      "flex items-center gap-2",
+                      "flex items-center justify-center gap-2",
                       evaluation.status === "Selected" ? "text-green-600" : "text-red-600"
                     )}>
                       {evaluation.status === "Selected" ? 
@@ -1749,22 +1751,24 @@ export default function ApplicantsEvaluationPage() {
                       {evaluation.status || '-'}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     {evaluation.meeting_scheduled ? "Yes" : "No"}
                   </TableCell>
-                  <TableCell className="flex gap-2">
+                  <TableCell className="text-center">
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="cursor-pointer mx-auto"
                       onClick={() => showCandidateDetails(evaluation)}
                     >
                       <Info className="h-5 w-5" />
                     </Button>
-                    
-                    {/* Always show the file icon, even if the resume URL is not available */}
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="cursor-pointer mx-auto"
                       onClick={() => {
                         if (candidate?.resume_url) {
                           window.open(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`, '_blank');
@@ -1779,12 +1783,13 @@ export default function ApplicantsEvaluationPage() {
                     >
                       <FileText className="h-5 w-5" />
                     </Button>
-                    
+                  </TableCell>
+                  <TableCell className="text-center">
                     {evaluation.status === "Selected" && !evaluation.meeting_scheduled && (
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        className="text-xs h-7 px-2 my-auto"
+                        className="text-xs h-7 px-2 my-auto mx-auto"
                         onClick={() => handleScheduleClick(
                           evaluation.candidate_id, 
                           displayName

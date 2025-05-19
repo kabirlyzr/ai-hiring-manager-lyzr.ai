@@ -43,10 +43,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <div className="fixed top-0 right-0 h-[80px] bg-background w-[86%] justify-end flex z-10">
+      <div className="fixed top-0 right-0 h-[88px] bg-background w-[86%] justify-end flex z-10">
         {/* <ProfileHeader /> */}
       </div>
-      <main className="flex-1 mt-[80px] overflow-auto pl-0 md:pl-60 border-t border-gray-200">
+      <main className="flex-1 mt-[88px] overflow-auto pl-0 md:pl-60 border-t border-gray-200">
         {children}
       </main>
     </div>

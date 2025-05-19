@@ -43,7 +43,8 @@ export async function GET(request: Request) {
                         message: 'Authentication successful',
                         user: {
                             user_id: existingUser.user_id,
-                            is_onboarded: existingUser.is_onboarded || false
+                            is_onboarded: existingUser.is_onboarded || false,
+                            tour_completed: existingUser.tour_completed || false
                         }
                     }, { status: 200 });
                 } else {
@@ -63,7 +64,8 @@ export async function GET(request: Request) {
                     api_key: token,
                     created_at: new Date().toISOString(),
                     last_login_at: new Date().toISOString(),
-                    is_onboarded: false
+                    is_onboarded: false,
+                    tour_completed: false
                 }])
                 .select()
                 .single();
@@ -78,7 +80,8 @@ export async function GET(request: Request) {
                 user: {
                     user_id: newUser.user_id,
                     is_onboarded: false,
-                    is_new_user: true
+                    is_new_user: true,
+                    tour_completed: false
                 }
             }, { status: 200 });
 

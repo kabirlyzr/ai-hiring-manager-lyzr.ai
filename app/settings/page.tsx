@@ -649,7 +649,7 @@ export default function SettingsPage() {
                 <DialogTrigger asChild>
                   <Button className="flex items-center gap-2">
                     <Plus size={16} />
-                    Add Reciter
+                    Add Recruiter
                   </Button>
                 </DialogTrigger>
                 <DialogContent>

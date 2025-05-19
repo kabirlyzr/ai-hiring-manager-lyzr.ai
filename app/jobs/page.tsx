@@ -158,8 +158,8 @@ export default function JobsPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
             {jobs.map((job) => (
-              <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200 group relative">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200 group relative ">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ">
                   <button 
                     onClick={(e) => handleDeleteJob(job.id, e)}
                     className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600"

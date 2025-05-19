@@ -21,30 +21,53 @@ async function processCandidate(
   dbCandidateName: string = ""
 ) {
   try {
-    // Ensure file has a name and type
-    if (!file.name) {
+    console.log(`Starting process for candidate with fileId: ${fileId}, filename: ${file?.name || 'undefined'}, size: ${file?.size || 0} bytes`);
+
+    // Ensure file has a name and type - create a new File object if needed
+    let processedFile = file;
+    if (!file.name || file.name === 'undefined') {
       const tempName = `resume-${fileId.substring(0, 8)}.pdf`;
-      console.log(`File missing name, assigning temporary name: ${tempName}`);
-      Object.defineProperty(file, 'name', {
-        writable: true,
-        value: tempName
-      });
+      console.log(`File missing name, creating new File object with name: ${tempName}`);
+      
+      try {
+        // Create a new File object with the same content but proper metadata
+        const fileContent = await file.arrayBuffer();
+        const blob = new Blob([fileContent], { type: file.type || 'application/pdf' });
+        processedFile = new File([blob], tempName, { 
+          type: file.type || 'application/pdf',
+          lastModified: file.lastModified || Date.now()
+        });
+        console.log(`Successfully created new File object with name: ${processedFile.name}, type: ${processedFile.type}`);
+      } catch (error) {
+        console.error(`Error creating new File object:`, error);
+        // Fallback to setting properties
+        try {
+          Object.defineProperty(file, 'name', {
+            writable: true,
+            value: tempName
+          });
+          
+          if (!file.type) {
+            Object.defineProperty(file, 'type', {
+              writable: true,
+              value: 'application/pdf'
+            });
+          }
+          
+          processedFile = file;
+          console.log(`Set properties on existing file: name=${file.name}, type=${file.type}`);
+        } catch (propError) {
+          console.error(`Could not set file properties:`, propError);
+        }
+      }
     }
-
-    if (!file.type) {
-      Object.defineProperty(file, 'type', {
-        writable: true,
-        value: 'application/pdf'
-      });
-    }
-
-    console.log(`Starting process for candidate with fileId: ${fileId}, filename: ${file.name}`);
 
     // Extract PDF text with better error handling
     let pdfText;
     let extractionFailed = false;
     try {
-      pdfText = await extractTextFromPDF(file);
+      console.log(`Calling extractTextFromPDF with file: ${processedFile.name}, size: ${processedFile.size} bytes`);
+      pdfText = await extractTextFromPDF(processedFile);
       console.log(`PDF Text extraction for ${fileId} completed, text length: ${pdfText.length}`);
 
       // Check if extraction failed - now using a different marker
@@ -66,7 +89,7 @@ async function processCandidate(
 The system was unable to extract text content from this PDF file.
 Error: ${error.message || "Unknown error"}
 
-Filename: ${file.name}
+Filename: ${processedFile.name}
   
 This resume could not be properly processed due to technical issues with the file.`;
     }
@@ -78,8 +101,8 @@ This resume could not be properly processed due to technical issues with the fil
     let candidateName = dbCandidateName || "";
 
     // If no DB name and extraction failed, try to get from filename
-    if (!candidateName && extractionFailed && file.name) {
-      candidateName = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    if (!candidateName && extractionFailed && processedFile.name) {
+      candidateName = processedFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').replace(/-/g, ' ').trim();
       console.log(`Using filename for candidate name: ${candidateName}`);
     }
 
@@ -99,7 +122,7 @@ This resume could not be properly processed due to technical issues with the fil
         The system was unable to extract text from the candidate's resume due to technical issues with the file.
         
         Candidate Name: ${candidateName || "Unknown"}
-        Resume Filename: ${file.name}
+        Resume Filename: ${processedFile.name}
         
         Error Message: ${pdfText.split('\n')[2] || "PDF Extraction Failed"}
         
@@ -194,13 +217,13 @@ This resume could not be properly processed due to technical issues with the fil
       } else if (candidateName) {
         evaluationResult.name = candidateName;
       } else if (!evaluationResult.name || evaluationResult.name === "Unknown Candidate" || evaluationResult.name === "Unknown") {
-        evaluationResult.name = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim() || "Unknown Candidate";
+        evaluationResult.name = processedFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim() || "Unknown Candidate";
       }
 
     } catch (jsonError) {
       console.error(`Error parsing JSON for ${fileId}:`, jsonError);
       // Create a fallback result if JSON parsing fails
-      const fileName = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim();
+      const fileName = processedFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim();
       evaluationResult = {
         name: dbCandidateName || candidateName || fileName || "Unknown Candidate",
         email: "unknown@example.com",
@@ -226,7 +249,7 @@ This resume could not be properly processed due to technical issues with the fil
   } catch (error: any) {
     console.error(`Error processing candidate with fileId ${fileId}:`, error);
     // Create a minimal result for the failed candidate
-    const fileName = file.name ? file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim() : "Unknown";
+    const fileName = file?.name ? file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').trim() : "Unknown";
     return {
       fileId,
       name: dbCandidateName || fileName || "Unknown Candidate",
@@ -347,23 +370,48 @@ export async function POST(request: NextRequest) {
           const { file, fileId, candidateName } = uniqueCandidateFiles[i];
 
           try {
-            // Ensure file has a name and type
-            if (!file.name) {
-              const tempName = `resume-${fileId.substring(0, 8)}.pdf`;
-              console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] File missing name, assigning: ${tempName}`);
-              Object.defineProperty(file, 'name', { writable: true, value: tempName });
+            // Create a properly named file object
+            let processedFile = file;
+            const defaultName = `resume-${fileId.substring(0, 8)}.pdf`;
+            
+            // Check if file needs proper properties
+            if (!file.name || file.name === 'undefined') {
+              console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] File missing name, creating new File object with name: ${defaultName}`);
+              
+              try {
+                // Create a new File object with proper metadata
+                const fileContent = await file.arrayBuffer();
+                const blob = new Blob([fileContent], { type: file.type || 'application/pdf' });
+                processedFile = new File([blob], defaultName, { 
+                  type: file.type || 'application/pdf',
+                  lastModified: file.lastModified || Date.now()
+                });
+                console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Successfully created new File object: ${processedFile.name}`);
+              } catch (error) {
+                console.error(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Error creating new File:`, error);
+                // Fallback to property setting
+                try {
+                  Object.defineProperty(file, 'name', { 
+                    writable: true, 
+                    value: defaultName 
+                  });
+                  
+                  if (!file.type) {
+                    Object.defineProperty(file, 'type', {
+                      writable: true,
+                      value: 'application/pdf'
+                    });
+                  }
+                  
+                  processedFile = file;
+                  console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Set name property: ${file.name}`);
+                } catch (propError) {
+                  console.error(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Failed to set properties:`, propError);
+                }
+              }
             }
 
-            // Ensure the file has a type
-            if (!file.type) {
-              console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] File missing type, setting to PDF`);
-              Object.defineProperty(file, 'type', {
-                writable: true,
-                value: 'application/pdf'
-              });
-            }
-
-            console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Starting PDF extraction for: ${file.name}, size: ${file.size} bytes`);
+            console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Starting PDF extraction for: ${processedFile.name}, size: ${processedFile.size} bytes`);
 
             // Extract text with multiple retries
             let pdfText = "";
@@ -373,7 +421,7 @@ export async function POST(request: NextRequest) {
 
             while (retryCount <= MAX_RETRIES) {
               try {
-                pdfText = await extractTextFromPDF(file);
+                pdfText = await extractTextFromPDF(processedFile);
                 console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] PDF Text extraction attempt #${retryCount + 1} completed`);
 
                 // Check if extraction failed but we got a fallback message
@@ -411,11 +459,11 @@ export async function POST(request: NextRequest) {
             // Store all processed data for evaluation
             candidateData.push({
               fileId,
-              fileName: file.name,
+              fileName: processedFile.name || defaultName,
               candidateName: candidateName,
               pdfText,
               extractionFailed,
-              file
+              file: processedFile  // Use the properly named file
             });
 
             console.log(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Successfully processed candidate: ${candidateName}`);
@@ -423,17 +471,20 @@ export async function POST(request: NextRequest) {
           } catch (processingError: any) {
             console.error(`[PDF PROCESS][${i + 1}/${uniqueCandidateFiles.length}] Failed to process file:`, processingError);
 
+            // Generate default name for fallback
+            const defaultName = `unknown-${fileId.substring(0, 8)}.pdf`;
+            
             // Still add to candidateData with error info so we can evaluate with limited data
             candidateData.push({
               fileId,
-              fileName: file.name || `unknown-${fileId.substring(0, 8)}.pdf`,
+              fileName: file.name || defaultName,
               candidateName: candidateName || `Candidate-${fileId.substring(0, 8)}`,
               pdfText: `[PDF EXTRACTION FAILED]
 
 The system was unable to extract text content from this PDF file.
 Error: ${processingError.message || "Unknown error"}
 
-Filename: ${file.name || `unknown-${fileId.substring(0, 8)}.pdf`}
+Filename: ${file.name || defaultName}
 ${candidateName ? `Possible Candidate Name: ${candidateName}` : ''}
   
 This resume could not be properly processed due to technical issues with the file.`,
