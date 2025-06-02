@@ -94,6 +94,21 @@ interface RecruiterWithSmtp {
 export default function ApplicantsEvaluationPage() {
   const router = useRouter();
   const { toast } = useToast();
+  
+  // For the multi-step loader (same as in CandidateEvaluation component)
+  const loadingStates = [
+    { text: "Reviewing resumes...", duration: 8000 },
+    { text: "Understanding the job description...", duration: 15000 },
+    { text: "Assessing evaluation criteria...", duration: 20000 },
+    { text: "Shortlisting candidates...", duration: 20000 },
+    { text: "Finalizing the results...", duration: 6000 },
+  ];
+  
+  // Polling configuration constants
+  const MAX_RETRY_ATTEMPTS = 3;
+  const POLLING_INTERVAL = 3000;
+  const MAX_POLLING_ATTEMPTS = 90;
+  
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [evaluations, setEvaluations] = useState<EvaluationResult[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<EvaluationResult | null>(null);
@@ -132,21 +147,8 @@ export default function ApplicantsEvaluationPage() {
   const [additionalIsDragging, setAdditionalIsDragging] = useState(false);
   const [uploadingAdditionalFiles, setUploadingAdditionalFiles] = useState(false);
   
-  // For the multi-step loader (same as in CandidateEvaluation component)
-  const loadingStates = [
-    { text: "Reviewing resumes...", duration: 8000 },
-    { text: "Understanding the job description...", duration: 8000 },
-    { text: "Assessing evaluation criteria...", duration: 8000 },
-    { text: "Shortlisting candidates...", duration: 10000 },
-    { text: "Finalizing the results...", duration: 6000 },
-    // { text: "Checking the hiring manager's calendar...", duration: 4000 },
-    // { text: "Scheduling the meeting...", duration: 15000 },
-  ];
-
-  // Polling configuration constants
-  const MAX_RETRY_ATTEMPTS = 3;
-  const POLLING_INTERVAL = 3000;
-  const MAX_POLLING_ATTEMPTS = 90;
+  // New state for dynamic loading states
+  const [currentLoadingStates, setCurrentLoadingStates] = useState(loadingStates);
 
   const cleanupDuplicateEvaluations = async () => {
     if (jobId) {
@@ -454,6 +456,20 @@ export default function ApplicantsEvaluationPage() {
       return;
     }
     
+    // Calculate batches for new candidates
+    const BATCH_SIZE = 10;
+    const totalBatches = Math.ceil(additionalPendingFiles.length / BATCH_SIZE);
+    
+    // Create dynamically scaled loading states based on batch count
+    // Multiply each duration directly by the number of batches
+    const dynamicLoadingStates = loadingStates.map(state => ({
+      text: state.text,
+      duration: state.duration * totalBatches
+    }));
+    
+    // Set the current loading states for the loader component
+    setCurrentLoadingStates(dynamicLoadingStates);
+    
     setEvaluatingMore(true);
     setUploadingAdditionalFiles(true);
     
@@ -463,8 +479,8 @@ export default function ApplicantsEvaluationPage() {
       
       // Show loading toast for upload
       toast({
-        title: "Uploading additional files",
-        description: `Uploading ${additionalPendingFiles.length} file(s)...`,
+        title: "Process Started",
+        description: `Uploading and evaluating ${additionalPendingFiles.length} file(s). Please wait...`,
       });
       
       // Get userId from client-side cookies
@@ -517,75 +533,111 @@ export default function ApplicantsEvaluationPage() {
       setCandidates(prevCandidates => [...prevCandidates, ...newCandidates]);
       
       toast({
-        title: "Success",
+        title: "Upload Complete",
         description: `${additionalPendingFiles.length} additional resume(s) uploaded. Starting evaluation...`,
       });
       
       setUploadingAdditionalFiles(false);
       
       // Now evaluate these new candidates using the same process as original evaluation
-      // Create form data for API call
-      const formData = new FormData();
+      // Calculate batches for new candidates
+      const BATCH_SIZE = 10;
+      const totalBatches = Math.ceil(newCandidates.length / BATCH_SIZE);
       
-      // Get resumes from candidate urls and add to formData
-      const candidatePromises = newCandidates.map(async (candidate) => {
-        if (!candidate.resume_url) {
-          throw new Error(`Resume URL not found for candidate ${candidate.name}`);
-        }
-        
-        // Use the proxy endpoint instead of fetching directly
-        const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.statusText}`);
-        }
-        
-        const blob = await response.blob();
-        const file = new File([blob], candidate.filename, { type: 'application/pdf' });
-        
-        // Add to formData
-        formData.append('pdfs', file);
-        formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
-        formData.append('candidateNames', candidate.name || ''); // Add candidate names
-      });
-      
-      // Wait for all candidates to be processed
-      await Promise.all(candidatePromises);
-      
-      // Add job details and criteria - use the exact same job details and criteria as original evaluation
-      formData.append('jobDetails', JSON.stringify({
-        description: jobDescription,
+      // Update loading states for the new evaluation
+      // Multiply each duration directly by the number of batches
+      const newDynamicLoadingStates = loadingStates.map(state => ({
+        text: state.text,
+        duration: state.duration * totalBatches
       }));
       
-      formData.append('criteria', JSON.stringify(criteria.map(c => ({
-        name: c.name || c.criteria,
-        description: c.description || c.criteria,
-        weight: c.weight || c.weightage
-      }))));
+      // Update loading states
+      setCurrentLoadingStates(newDynamicLoadingStates);
       
-      // Call the evaluation API
-      const evalResponse = await fetch('/api/evaluate', {
-        method: 'POST',
-        body: formData
-      });
+      let allResults: any[] = [];
+      let processedFilesCount = 0;
       
-      if (!evalResponse.ok) {
-        throw new Error(`Evaluation API error: ${evalResponse.status}`);
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const endIdx = Math.min((batchIndex + 1) * BATCH_SIZE, newCandidates.length);
+        const batchCandidates = newCandidates.slice(startIdx, endIdx);
+        
+        // Update toast for current batch
+        toast({
+          title: `Processing Batch ${batchIndex + 1}/${totalBatches}`,
+          description: `Evaluating ${batchCandidates.length} out of ${newCandidates.length} resumes...`,
+        });
+      
+        // Create form data for API call
+        const formData = new FormData();
+        
+        // Get resumes from candidate urls and add to formData
+        const candidatePromises = batchCandidates.map(async (candidate) => {
+          if (!candidate.resume_url) {
+            throw new Error(`Resume URL not found for candidate ${candidate.name}`);
+          }
+          
+          // Use the proxy endpoint instead of fetching directly
+          const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch file: ${response.statusText}`);
+          }
+          
+          const blob = await response.blob();
+          const file = new File([blob], candidate.filename, { type: 'application/pdf' });
+          
+          // Add to formData
+          formData.append('pdfs', file);
+          formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
+          formData.append('candidateNames', candidate.name || ''); // Add candidate names
+        });
+        
+        // Wait for all candidates to be processed
+        await Promise.all(candidatePromises);
+        
+        // Add job details and criteria - use the exact same job details and criteria as original evaluation
+        formData.append('jobDetails', JSON.stringify({
+          description: jobDescription,
+        }));
+        
+        formData.append('criteria', JSON.stringify(criteria.map(c => ({
+          name: c.name || c.criteria,
+          description: c.description || c.criteria,
+          weight: c.weight || c.weightage
+        }))));
+        
+        // Call the evaluation API
+        const evalResponse = await fetch('/api/evaluate', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!evalResponse.ok) {
+          throw new Error(`Evaluation API error: ${evalResponse.status}`);
+        }
+        
+        const { jobId: evaluationJobId } = await evalResponse.json();
+        
+        // Poll for results
+        const batchResults = await pollResults(evaluationJobId);
+        allResults = [...allResults, ...batchResults];
+        
+        // Update processed files count and show toast for batch completion
+        processedFilesCount += batchCandidates.length;
+        toast({
+          title: `Batch ${batchIndex + 1}/${totalBatches} Completed`,
+          description: `${processedFilesCount} out of ${newCandidates.length} files processed so far.`,
+        });
       }
       
-      const { jobId: evaluationJobId } = await evalResponse.json();
-      
-      // Show evaluating toast
+      // Process results and save to database
       toast({
-        title: "Evaluating additional resumes",
-        description: `Processing ${newCandidates.length} resume(s)...`,
+        title: "Processing Results",
+        description: `Saving evaluation results to database...`,
       });
       
-      // Poll for results
-      const results = await pollResults(evaluationJobId);
-      
-      // Process results and save to database
-      const evaluationPromises = results.map(async (result) => {
+      const evaluationPromises = allResults.map(async (result) => {
         try {
           // Map evaluation results to our database schema
           const candidateId = result.fileId; // fileId contains the candidate ID
@@ -1007,16 +1059,7 @@ export default function ApplicantsEvaluationPage() {
           } else {
             noProgressCount++;
           }
-          
-          // If we've been stuck with no progress for a while, warn the user
-          if (noProgressCount >= MAX_NO_PROGRESS) {
-            toast({
-              title: "Processing slowly",
-              description:  `PDF extraction issues detected.`,
-              variant: "default"
-            });
-            noProgressCount = 0; // Reset to avoid spamming
-          }
+
           
           // If we have partial results and have been polling for a while, return them
           if (currentResultCount > 0 && attempts > MAX_POLLING_ATTEMPTS / 2) {
@@ -1103,6 +1146,21 @@ export default function ApplicantsEvaluationPage() {
       return;
     }
     
+    // Calculate the number of batches needed (10 files per batch)
+    const BATCH_SIZE = 10;
+    const totalBatches = Math.ceil(candidates.length / BATCH_SIZE);
+    
+    // Create dynamically scaled loading states based on batch count
+    // Multiply each duration directly by the number of batches
+    const dynamicLoadingStates = loadingStates.map(state => ({
+      text: state.text,
+      duration: state.duration * totalBatches
+    }));
+    
+    // Set the current loading states for the loader component
+    setCurrentLoadingStates(dynamicLoadingStates);
+    
+    // Start evaluation
     setIsEvaluating(true);
     
     try {
@@ -1112,10 +1170,10 @@ export default function ApplicantsEvaluationPage() {
       // Make sure we have the latest candidates from the database before evaluating
       await fetchCandidates(jobId);
       
-      // Show a detailed toast about processing
+      // Show a detailed toast about processing start
       toast({
-        title: "Processing Resumes",
-        description: `Evaluating ${candidates.length} resumes. This may take a few minutes.`,
+        title: "Process Started",
+        description: `Evaluating ${candidates.length} resumes in ${totalBatches} batch(es). Please wait...`,
       });
       
       // Get userId from client-side cookies 
@@ -1125,62 +1183,92 @@ export default function ApplicantsEvaluationPage() {
         throw new Error("User not authenticated");
       }
       
-      // Create form data for API call
-      const formData = new FormData();
+      // Process candidates in batches
+      let allResults: any[] = [];
+      let processedFilesCount = 0;
       
-      // Get resumes from candidate urls and add to formData
-      const candidatePromises = candidates.map(async (candidate) => {
-        if (!candidate.resume_url) {
-          throw new Error(`Resume URL not found for candidate ${candidate.name}`);
+      // Split candidates into batches of BATCH_SIZE
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const endIdx = Math.min((batchIndex + 1) * BATCH_SIZE, candidates.length);
+        const batchCandidates = candidates.slice(startIdx, endIdx);
+        
+        // Update toast for current batch
+        toast({
+          title: `Processing Batch ${batchIndex + 1}/${totalBatches}`,
+          description: `Evaluating ${batchCandidates.length} out of ${candidates.length} resumes...`,
+        });
+        
+        // Create form data for API call
+        const formData = new FormData();
+        
+        // Get resumes from candidate urls and add to formData
+        const candidatePromises = batchCandidates.map(async (candidate) => {
+          if (!candidate.resume_url) {
+            throw new Error(`Resume URL not found for candidate ${candidate.name}`);
+          }
+          
+          // Use the proxy endpoint instead of fetching directly
+          const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch file: ${response.statusText}`);
+          }
+          
+          const blob = await response.blob();
+          const file = new File([blob], candidate.filename, { type: 'application/pdf' });
+          
+          // Add to formData
+          formData.append('pdfs', file);
+          formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
+          formData.append('candidateNames', candidate.name || ''); // Add candidate names
+        });
+        
+        // Wait for all candidates in the batch to be processed
+        await Promise.all(candidatePromises);
+        
+        // Add job details and criteria
+        formData.append('jobDetails', JSON.stringify({
+          description: jobDescription,
+        }));
+        
+        formData.append('criteria', JSON.stringify(criteria.map(c => ({
+          name: c.name || c.criteria,
+          description: c.description || c.criteria,
+          weight: c.weight || c.weightage
+        }))));
+        
+        // Call the evaluation API for this batch
+        const evalResponse = await fetch('/api/evaluate', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!evalResponse.ok) {
+          throw new Error(`Evaluation API error: ${evalResponse.status}`);
         }
         
-        // Use the proxy endpoint instead of fetching directly
-        const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
+        const { jobId: evaluationJobId } = await evalResponse.json();
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.statusText}`);
-        }
+        // Poll for results for this batch
+        const batchResults = await pollResults(evaluationJobId);
+        allResults = [...allResults, ...batchResults];
         
-        const blob = await response.blob();
-        const file = new File([blob], candidate.filename, { type: 'application/pdf' });
-        
-        // Add to formData
-        formData.append('pdfs', file);
-        formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
-        formData.append('candidateNames', candidate.name || ''); // Add candidate names
-      });
-      
-      // Wait for all candidates to be processed
-      await Promise.all(candidatePromises);
-      
-      // Add job details and criteria
-      formData.append('jobDetails', JSON.stringify({
-        description: jobDescription,
-      }));
-      
-      formData.append('criteria', JSON.stringify(criteria.map(c => ({
-        name: c.name || c.criteria,
-        description: c.description || c.criteria,
-        weight: c.weight || c.weightage
-      }))));
-      
-      // Call the evaluation API
-      const evalResponse = await fetch('/api/evaluate', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!evalResponse.ok) {
-        throw new Error(`Evaluation API error: ${evalResponse.status}`);
+        // Update processed files count and show toast for batch completion
+        processedFilesCount += batchCandidates.length;
+        toast({
+          title: `Batch ${batchIndex + 1}/${totalBatches} Completed`,
+          description: `${processedFilesCount} out of ${candidates.length} files processed so far.`,
+        });
       }
       
-      const { jobId: evaluationJobId } = await evalResponse.json();
+      // Process all results and save to database
+      toast({
+        title: "Processing Results",
+        description: `Saving evaluation results to database...`,
+      });
       
-      // Poll for results
-      const results = await pollResults(evaluationJobId);
-      
-      // Process results and save to database
-      const evaluationPromises = results.map(async (result) => {
+      const evaluationPromises = allResults.map(async (result) => {
         try {
           // Map evaluation results to our database schema
           const candidateId = result.fileId; // fileId contains the candidate ID
@@ -1641,7 +1729,11 @@ export default function ApplicantsEvaluationPage() {
   if (isEvaluating) {
     return (
       <div className="h-[90%] flex justify-center items-center">
-        <MultiStepLoader loadingStates={loadingStates} loading={true} loop={false} />
+        <MultiStepLoader 
+          loadingStates={currentLoadingStates} 
+          loading={true} 
+          loop={false}
+        />
       </div>
     );
   }
@@ -1727,7 +1819,7 @@ export default function ApplicantsEvaluationPage() {
               <TableHead className="text-center">Meeting Scheduled</TableHead>
               <TableHead className="text-center">Evaluation</TableHead>
               <TableHead className="text-center">Resume</TableHead>
-              <TableHead className="text-center">Schedule</TableHead>
+              <TableHead className="text-center">Schedule Interview</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1738,7 +1830,7 @@ export default function ApplicantsEvaluationPage() {
               return (
                 <TableRow key={evaluation.id}>
                   <TableCell className="font-medium text-center">{displayName}</TableCell>
-                  <TableCell className="text-center">{evaluation.final_score || evaluation["Final score"] || "-"}</TableCell>
+                  <TableCell className="text-center">{evaluation.final_score || evaluation["Final score"]|| evaluation["final_score"]}</TableCell>
                   <TableCell className="text-center">
                     <span className={cn(
                       "flex items-center justify-center gap-2",
@@ -1813,7 +1905,7 @@ export default function ApplicantsEvaluationPage() {
             </DialogHeader>
             <div className="mt-4 space-y-4">
               <h3 className="font-semibold">
-                <span className="text-green-700">{selectedDetailsCandidate?.status }</span> - {selectedDetailsCandidate?.final_score || selectedDetailsCandidate?.["Final score"]}%
+                <span className="text-green-700">{selectedDetailsCandidate?.status }</span> - {selectedDetailsCandidate?.final_score || selectedDetailsCandidate?.["Final score"] || selectedDetailsCandidate?.["final_score"]}%
               </h3>
               <p className="text-muted-foreground">{selectedDetailsCandidate?.reason}</p>
 
