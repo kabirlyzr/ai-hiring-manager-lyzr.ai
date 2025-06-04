@@ -66,8 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const tokenData = (await lyzr.getKeys()) as unknown as TokenData[];
 
       if (tokenData && tokenData[0]) {
-        Cookies.set("user_id", tokenData[0].user_id);
-        Cookies.set("token", tokenData[0].api_key);
+        // Set cookies with 7-day expiration
+        Cookies.set("user_id", tokenData[0].user_id, { expires: 7 });
+        Cookies.set("token", tokenData[0].api_key, { expires: 7 });
 
         const response = await fetch("/api/auth");
         const data = await response.json();
@@ -95,6 +96,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           handleAuthFailure();
         }
       } else {
+        // Check if we have stored cookies
+        const storedUserId = Cookies.get("user_id");
+        const storedToken = Cookies.get("token");
+        
+        if (storedUserId && storedToken) {
+          // Validate stored tokens against backend
+          try {
+            const response = await fetch("/api/auth");
+            const data = await response.json();
+            
+            if (data.success) {
+              setIsAuthenticated(true);
+              setUserId(storedUserId);
+              setToken(storedToken);
+              
+              const userData = data.user as UserData;
+              setIsOnboarded(userData.is_onboarded);
+              setIsNewUser(userData.is_new_user || false);
+              setTourCompleted(userData.tour_completed || false);
+              
+              if (userData.is_onboarded) {
+                dispatch(completeOnboarding());
+              }
+              
+              // Refresh cookies to extend expiration
+              Cookies.set("user_id", storedUserId, { expires: 7 });
+              Cookies.set("token", storedToken, { expires: 7 });
+              
+              return;
+            }
+          } catch (error) {
+            console.error("Failed to validate stored tokens:", error);
+          }
+        }
+        
         handleAuthFailure();
       }
     } catch (err) {

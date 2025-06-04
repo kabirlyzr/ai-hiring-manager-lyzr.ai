@@ -38,6 +38,16 @@ export async function GET(request: Request) {
             if (existingUser) {
                 // Verify if token matches
                 if (existingUser.api_key === token) {
+                    // Update last login time to track session activity
+                    const { error: updateError } = await supabase
+                        .from('users')
+                        .update({ last_login_at: new Date().toISOString() })
+                        .eq('user_id', userId);
+                    
+                    if (updateError) {
+                        console.error('Failed to update last login time:', updateError);
+                    }
+                    
                     return NextResponse.json({
                         success: true,
                         message: 'Authentication successful',
