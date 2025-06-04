@@ -150,8 +150,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTourCompleted(false);
     Cookies.remove("user_id");
     Cookies.remove("token");
-    router.push("/");
+    
+    // Only redirect if we're not already on the home page
+    if (window.location.pathname !== '/') {
+      router.push("/");
+    }
   };
+
+  // Check authentication status when tab becomes visible again
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tab is now visible/active
+        const storedUserId = Cookies.get("user_id");
+        const storedToken = Cookies.get("token");
+        
+        // Check if cookies exist and we're not already authenticated
+        if (storedUserId && storedToken) {
+          if (!isAuthenticated) {
+            checkAuth();
+          }
+        } else if (isAuthenticated) {
+          // If cookies don't exist but we think we're authenticated, reset state
+          handleAuthFailure();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // When the user navigates between pages, check auth status
+    const handleRouteChange = () => {
+      const storedUserId = Cookies.get("user_id");
+      const storedToken = Cookies.get("token");
+      
+      if (!storedUserId || !storedToken) {
+        if (isAuthenticated) {
+          handleAuthFailure();
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const init = async () => {

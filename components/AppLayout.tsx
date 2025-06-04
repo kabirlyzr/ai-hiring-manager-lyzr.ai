@@ -1,8 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
+import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "./auth/AuthProvider";
+import Cookies from "js-cookie";
 
 function GlobalLoader() {
   return (
@@ -16,27 +20,46 @@ function GlobalLoader() {
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const { isAuthenticated, isLoading, checkAuth } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // List of paths that don't require authentication
+  const publicPaths = ['/', '/onboarding'];
+  const isPublicPath = publicPaths.some(path => pathname === path);
 
   useEffect(() => {
-    // Simulate auth check - replace with actual auth check
-    const checkAuth = async () => {
-      try {
-        // Replace this with your actual authentication verification
-        // For example: await fetchUserProfile() or await checkSession()
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulating auth call
-        setIsAuthReady(true);
-      } catch (error) {
-        console.error("Authentication error:", error);
-        // Handle auth error if needed
-        setIsAuthReady(true); // Still set to true to avoid blocking UI
+    // Check authentication status on route change
+    const verifyAuth = async () => {
+      // Skip auth check for public paths
+      if (isPublicPath) return;
+
+      const userId = Cookies.get('user_id');
+      const token = Cookies.get('token');
+
+      // If no cookies and path requires auth, redirect to home
+      if (!userId || !token) {
+        router.push('/');
+        return;
+      }
+
+      // If we have cookies but aren't authenticated yet, run checkAuth
+      if (!isAuthenticated) {
+        await checkAuth();
       }
     };
 
-    checkAuth();
-  }, []);
+    verifyAuth();
+  }, [pathname, isAuthenticated, isPublicPath, router, checkAuth]);
 
-  if (!isAuthReady) {
+  // Show loader while initial auth check is in progress
+  if (isLoading) {
+    return <GlobalLoader />;
+  }
+
+  // If path requires authentication and user is not authenticated, show loader
+  // This gives time for the auth check to complete
+  if (!isPublicPath && !isAuthenticated) {
     return <GlobalLoader />;
   }
 
