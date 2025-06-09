@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 // import {
 //   Table, 
@@ -32,6 +33,19 @@ interface Criterion {
   job_id?: string;
 }
 
+interface LyzrCriterionResponse {
+  criteria_name: string;
+  evaluation_criteria: string;
+  Weightage: number | string;
+}
+
+interface JobDetails {
+  job_title?: string;
+  description?: string;
+  requirements?: string;
+  id?: string;
+}
+
 export default function EvaluationCriteriaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -54,6 +68,12 @@ export default function EvaluationCriteriaPage() {
   });
   const [isUpdatingCriterion, setIsUpdatingCriterion] = useState(false);
   const [lastFetchedJobId, setLastFetchedJobId] = useState<string | null>(null);
+  const [jobDetails, setJobDetails] = useState<JobDetails | null>(null);
+  
+  // Add useRef to track initial mount and prevent duplicate API calls
+  const initialFetchRef = useRef(false);
+  // Add useRef to track if Lyzr API has been called for a job
+  const lyzrApiCalledRef = useRef<Set<string>>(new Set());
 
   // Store criteria in localStorage when it changes
   useEffect(() => {
@@ -84,7 +104,10 @@ export default function EvaluationCriteriaPage() {
       }
       
       // Only fetch from server if we have a new job ID or we're returning to this page
-      if (activeJobId !== lastFetchedJobId) {
+      // AND we haven't already fetched in this component lifecycle
+      if ((activeJobId !== lastFetchedJobId) && !initialFetchRef.current) {
+        initialFetchRef.current = true;
+        fetchJobDetails(activeJobId);
         fetchCriteria(activeJobId);
         setLastFetchedJobId(activeJobId);
       }
@@ -104,7 +127,39 @@ export default function EvaluationCriteriaPage() {
     }
   }, [searchParams, pathname]); // Added pathname dependency to refetch on navigation
 
+  const fetchJobDetails = async (id: string) => {
+    try {
+      console.log("Fetching job details for ID:", id);
+      const response = await fetch(`/api/jobs/${id}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch job details: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Job details API response:", data);
+      
+      if (data.success && data.job) {
+        const job = data.job;
+        console.log("Setting job details:", job);
+        setJobDetails(job);
+        // Return the job details for immediate use
+        return job;
+      }
+    } catch (error) {
+      console.error("Error fetching job details:", error);
+    }
+    return null;
+  };
+
   const fetchCriteria = async (id: string) => {
+    // If we already have criteria in state, don't fetch again
+    if (criteria.length > 0 && criteria[0].job_id === id) {
+      console.log("Using existing criteria from state");
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const response = await fetch(`/api/criteria?job_id=${id}`);
@@ -116,9 +171,14 @@ export default function EvaluationCriteriaPage() {
       const data = await response.json();
       
       if (data.success) {
-        setCriteria(data.criteria || []);
-        // Update cache
-        localStorage.setItem(`criteria_${id}`, JSON.stringify(data.criteria || []));
+        if (data.criteria && data.criteria.length > 0) {
+          setCriteria(data.criteria || []);
+          // Update cache
+          localStorage.setItem(`criteria_${id}`, JSON.stringify(data.criteria || []));
+        } else {
+          // No criteria found, fetch from Lyzr API
+          await fetchFromLyzrApi(id);
+        }
       } else {
         throw new Error(data.message || "Failed to fetch criteria");
       }
@@ -131,6 +191,120 @@ export default function EvaluationCriteriaPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchFromLyzrApi = async (jobId: string) => {
+    try {
+      // Check if we've already called the Lyzr API for this job ID
+      if (lyzrApiCalledRef.current.has(jobId)) {
+        console.log("Skipping duplicate Lyzr API call for job:", jobId);
+        return;
+      }
+      
+      // Mark this job ID as processed
+      lyzrApiCalledRef.current.add(jobId);
+      
+      // Directly fetch job details and use them immediately
+      console.log("Starting Lyzr API fetch for job:", jobId);
+      
+      // Fetch fresh job details
+      const jobResponse = await fetch(`/api/jobs/${jobId}`);
+      if (!jobResponse.ok) {
+        throw new Error(`Failed to fetch job details: ${jobResponse.status}`);
+      }
+      
+      const jobData = await jobResponse.json();
+      console.log("Job data received:", jobData);
+      
+      if (!jobData.success || !jobData.job) {
+        throw new Error("Could not retrieve job details");
+      }
+      
+      const job = jobData.job;
+      
+      // Update the state with the job details
+      setJobDetails(job);
+      
+      // Now use these details to call the Lyzr API
+      console.log("Sending to Lyzr API:", {
+        job_description: job.description || "Not specified",
+        job_title: job.job_title || "Not specified",
+        requirements: job.requirements || "Not specified"
+      });
+      
+      const response = await fetch(`/api/lyzr-criteria?jobId=${jobId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          job_description: job.description || "Not specified",
+          job_title: job.job_title || "Not specified",
+          requirements: job.requirements || "Not specified"
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch criteria from Lyzr: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Lyzr API response:", data);
+      
+      if (data.success && data.criteria && data.criteria.length > 0) {
+        // Transform and store the criteria
+        const transformedCriteria = data.criteria.map((item: LyzrCriterionResponse) => ({
+          id: uuidv4(),
+          name: item.criteria_name,
+          criteria: item.evaluation_criteria,
+          weightage: typeof item.Weightage === 'string' ? parseInt(item.Weightage) : item.Weightage,
+          job_id: jobId
+        }));
+        
+        console.log("Transformed criteria:", transformedCriteria);
+        setCriteria(transformedCriteria);
+        localStorage.setItem(`criteria_${jobId}`, JSON.stringify(transformedCriteria));
+        
+        // Save to database
+        await saveLyzrCriteriaToDb(transformedCriteria);
+      } else {
+        console.warn("No criteria returned from Lyzr API");
+      }
+    } catch (error) {
+      console.error("Error fetching from Lyzr API:", error);
+      toast({
+        title: "Note",
+        description: "Could not load suggested criteria. You can add criteria manually.",
+      });
+    }
+  };
+
+  const saveLyzrCriteriaToDb = async (criteriaToSave: Criterion[]) => {
+    try {
+      const response = await fetch("/api/criteria", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-save-all": "true"
+        },
+        body: JSON.stringify({ criteria: criteriaToSave }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save Lyzr criteria: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Suggested evaluation criteria loaded",
+        });
+      }
+    } catch (error) {
+      console.error("Error saving Lyzr criteria:", error);
     }
   };
 
@@ -434,9 +608,11 @@ export default function EvaluationCriteriaPage() {
   return (
     <div className="w-full">
       <div className="flex justify-end mt-2 mb-6">
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={saveCriteria} disabled={isSaving}>
-          Start Evaluating
-        </Button>
+        {!isLoading && (
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={saveCriteria} disabled={isSaving}>
+            Start Evaluating
+          </Button>
+        )}
       </div>
       
       {isLoading ? (
