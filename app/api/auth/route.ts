@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
             if (existingUser) {
                 // Verify if token matches
-                if (existingUser.api_key === token) {
+                if (existingUser.user_id === userId) {
                     // Update last login time to track session activity
                     const { error: updateError } = await supabase
                         .from('users')
