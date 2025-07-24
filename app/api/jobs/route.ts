@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       }, { status: 401 });
     }
     
-    const { job_title, description, requirements } = await request.json();
+    const { job_title, description, requirements, current_step } = await request.json();
     
     if (!job_title) {
       return NextResponse.json({
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
         user_id: userId,
         job_title,
         description,
-        requirements
+        requirements,
+        current_step: current_step || "details" // Default to first step if not provided
       })
       .select()
       .single();

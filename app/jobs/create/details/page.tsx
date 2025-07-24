@@ -228,6 +228,7 @@ export default function JobDetailsPage() {
           job_title: finalTitle,
           description: finalDescription,
           requirements: finalRequirements,
+          current_step: "criteria" // Set the next step with simpler name
         }),
       });
 

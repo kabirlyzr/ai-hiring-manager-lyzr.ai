@@ -585,6 +585,17 @@ export default function EvaluationCriteriaPage() {
       const data = await response.json();
 
       if (data.success) {
+        // Update the job's current step
+        await fetch(`/api/jobs/${jobId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            current_step: "applicants"
+          }),
+        });
+        
         toast({
           title: "Success",
           description: "Evaluation criteria saved successfully",
@@ -610,7 +621,7 @@ export default function EvaluationCriteriaPage() {
       <div className="flex justify-end mt-2 mb-6">
         {!isLoading && (
           <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={saveCriteria} disabled={isSaving}>
-            Start Evaluating
+            Save & Continue
           </Button>
         )}
       </div>

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { useSearchParams } from "next/navigation";
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Table, 
@@ -33,7 +34,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Mail, AlertCircle, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Plus, Mail, AlertCircle, CheckCircle, XCircle, Loader2, Info, Play } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 // import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -63,9 +64,34 @@ interface SmtpData {
   port: string;
 }
 
+// Add this component before the SettingsPage component
+const CustomTooltip = ({ content }: { content: string }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div className="relative inline-block">
+      {isVisible && (
+        <div className="absolute z-50 w-64 -ml-1.5 p-2 mb-1.5 text-[#292929] bg-gray-200 rounded-lg shadow-lg bottom-full">
+          <div className="absolute w-3 h-3 bg-gray-200 transform rotate-45 top-full -mt-1.5 left-2.5" />
+          <p className='text-xs whitespace-pre-wrap'>{content}</p>
+        </div>
+      )}
+      <div
+        className="inline-block cursor-help"
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+      >
+        <Info className="inline-block w-3 h-3 ml-1 mb-0.5 text-gray-400 hover:text-purple-500" />
+      </div>
+    </div>
+  );
+};
+
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("company");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam === "recruiters" ? "recruiters" : "company");
   // const [enableSettings, setEnableSettings] = useState(true);
   
   // Define setting steps for navigation
@@ -101,6 +127,7 @@ export default function SettingsPage() {
     host: "",
     port: ""
   });
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
   // Add state to track which recruiters have SMTP configured
   const [recruiterSmtpStatus, setRecruiterSmtpStatus] = useState<Record<string, boolean>>({});
@@ -114,6 +141,14 @@ export default function SettingsPage() {
   // Add loading states for data fetching
   const [loadingCompany, setLoadingCompany] = useState(true);
   const [loadingRecruiters, setLoadingRecruiters] = useState(true);
+  
+  // Add this before the useEffect hooks
+  const tooltips = {
+    smtp_username: "Your email address or SMTP username provided by your email service",
+    smtp_password: "To generate an SMTP password for Gmail, follow these steps:\n\n1. Enable 2-Step Verification in your Google Account settings.\n2. Navigate to App Passwords (Settings > Security > App Passwords).\n3. Create a new app password specifically for SMTP.\n4. Use the generated password in your SMTP configurations.\n",
+    smtp_server: "SMTP server address (e.g., smtp.gmail.com for Gmail)",
+    smtp_port: "SMTP port number (common ports: 587 for TLS, 465 for SSL)",
+  };
   
   useEffect(() => {
     // Fetch company data
@@ -761,14 +796,44 @@ export default function SettingsPage() {
                 </DialogContent>
               </Dialog>
               
-              <Dialog open={smtpDialogOpen} onOpenChange={setSmtpDialogOpen}>
-                <DialogContent>
+              <Dialog open={smtpDialogOpen} onOpenChange={(open) => {
+                setSmtpDialogOpen(open);
+                if (!open) {
+                  setIsVideoPlaying(false);
+                }
+              }}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>SMTP Settings</DialogTitle>
+                    <span className="text-gray-500 text-sm">🚨 Microsoft accounts are not supported yet. We&apos;re working on adding support for them soon.</span>
                   </DialogHeader>
                   <div className="space-y-4 mt-4">
+                    <div className="mb-6 relative rounded-lg overflow-hidden">
+                      <p className="text-gray-900 text-sm mb-2 font-semibold">Quick guide:</p>
+                      {!isVideoPlaying ? (
+                        <div 
+                          className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center cursor-pointer z-10"
+                          onClick={() => setIsVideoPlaying(true)}
+                        >
+                          <Play className="text-white w-12 h-12" />
+                        </div>
+                      ) : null}
+                      <iframe 
+                        width="100%" 
+                        height="215" 
+                        src={isVideoPlaying ? "https://www.youtube.com/embed/cCxXE65Cnbw?autoplay=1" : "https://www.youtube.com/embed/cCxXE65Cnbw"}
+                        title="SMTP Setup Guide" 
+                        frameBorder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowFullScreen
+                        className={`${!isVideoPlaying ? 'opacity-50' : ''}`}
+                      ></iframe>
+                    </div>
+                    
                     <div className="space-y-2">
-                      <Label htmlFor="smtp_username">SMTP Username</Label>
+                      <Label htmlFor="smtp_username">SMTP Username
+                        <CustomTooltip content={tooltips.smtp_username} />
+                      </Label>
                       <Input
                         id="smtp_username"
                         name="username"
@@ -779,7 +844,9 @@ export default function SettingsPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="smtp_password">SMTP Password</Label>
+                      <Label htmlFor="smtp_password">SMTP Password
+                        <CustomTooltip content={tooltips.smtp_password} />
+                      </Label>
                       <Input
                         id="smtp_password"
                         name="password"
@@ -788,10 +855,15 @@ export default function SettingsPage() {
                         onChange={handleSmtpChange}
                         placeholder="••••••••"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        *SMTP app password differs from your Email password. Click<a href="https://lyzr.notion.site/Setting-up-SMTP-password-for-Google-accounts-17f40f4a0e9a80b3b3cbe455601acdee?pvs=4" className="text-blue-500 underline" target="_blank" rel="noopener noreferrer"> here </a>to learn how to generate it.
+                      </p>
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="smtp_host">SMTP Host</Label>
+                      <Label htmlFor="smtp_host">SMTP Server
+                        <CustomTooltip content={tooltips.smtp_server} />
+                      </Label>
                       <Input
                         id="smtp_host"
                         name="host"
@@ -802,7 +874,9 @@ export default function SettingsPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="smtp_port">SMTP Port</Label>
+                      <Label htmlFor="smtp_port">SMTP Port
+                        <CustomTooltip content={tooltips.smtp_port} />
+                      </Label>
                       <Input
                         id="smtp_port"
                         name="port"
@@ -812,7 +886,7 @@ export default function SettingsPage() {
                       />
                     </div>
                     
-                    {smtpData.host.includes('gmail.com') && (
+                   
                       <div className="bg-amber-50 p-3 rounded-md text-sm border border-amber-200 mt-2">
                         <div className="flex items-start gap-2">
                           <AlertCircle size={16} className="text-amber-800 mt-1 flex-shrink-0" />
@@ -827,7 +901,7 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       </div>
-                    )}
+                   
                     
                     {/* Verification result display */}
                     {verificationStatus && (

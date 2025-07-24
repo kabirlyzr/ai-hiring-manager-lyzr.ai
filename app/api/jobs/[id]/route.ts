@@ -65,9 +65,15 @@ export async function PUT(
     }
     
     
-    const { job_title, description, requirements } = await request.json();
+    const requestBody = await request.json();
+    const { job_title, description, requirements, current_step } = requestBody;
     
-    if (!job_title) {
+    // Check if this is a step update only
+    const isStepUpdateOnly = 'current_step' in requestBody && 
+      Object.keys(requestBody).length === 1;
+    
+    // Only validate job_title if this is not a step-only update
+    if (!isStepUpdateOnly && !job_title) {
       return NextResponse.json({
         success: false,
         message: 'Job title is required',
@@ -89,15 +95,27 @@ export async function PUT(
       }, { status: 404 });
     }
     
+    // Prepare update object
+    const updateData: {
+      job_title?: string;
+      description?: string;
+      requirements?: string;
+      current_step?: string;
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString()
+    };
+    
+    // Add fields that are present in the request
+    if (job_title) updateData.job_title = job_title;
+    if (description !== undefined) updateData.description = description;
+    if (requirements !== undefined) updateData.requirements = requirements;
+    if (current_step !== undefined) updateData.current_step = current_step;
+    
     // Update job
     const { data, error } = await supabase
       .from('jobs')
-      .update({
-        job_title,
-        description,
-        requirements,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();

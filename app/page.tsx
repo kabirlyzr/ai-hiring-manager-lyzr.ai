@@ -37,6 +37,14 @@ interface Candidate {
   id: string;
   job_id: string;
   created_at: string;
+  user_id: string;
+  meeting_scheduled: boolean;
+  name?: string;
+}
+
+interface EvaluationResult {
+  meeting_scheduled?: boolean | string;
+  [key: string]: unknown;
 }
 
 interface Evaluation {
@@ -44,6 +52,8 @@ interface Evaluation {
   candidate_id: string;
   score: number;
   status: string;
+  final_score: number;
+  result: EvaluationResult;
 }
 
 interface TrendData {
@@ -101,8 +111,8 @@ export default function Home() {
         const candidatesResponse = await fetch('/api/candidates?job_id=all');
         const candidatesData = await candidatesResponse.json();
         
-        // Fetch evaluations data
-        const evaluationsResponse = await fetch('/api/evaluations');
+        // Fetch user-specific evaluations data using the new endpoint
+        const evaluationsResponse = await fetch('/api/user-evaluations');
         const evaluationsData = await evaluationsResponse.json();
         
         // Process the data for dashboard
@@ -110,9 +120,16 @@ export default function Home() {
         const candidates: Candidate[] = candidatesData.success ? candidatesData.candidates : [];
         const evaluations: Evaluation[] = evaluationsData.success ? evaluationsData.evaluations : [];
         
-        // Calculate metrics
-        const shortlistedCandidates = evaluations.filter((e: Evaluation) => e.score > 70).length;
-        const interviewsScheduled = evaluations.filter((e: Evaluation) => e.status === 'scheduled').length;
+        console.log(`Dashboard data - Candidates: ${candidates.length}, Evaluations: ${evaluations.length}`);
+        
+        // Count candidates with final_score > 70 as shortlisted
+        const shortlistedCandidates = evaluations.filter(e => e.final_score > 70).length;
+
+        // Only count candidates with meeting_scheduled=true from the candidates table
+        // Do NOT count evaluations with status=Selected as having meetings scheduled
+        const interviewsScheduled = candidates.filter(c => c.meeting_scheduled === true).length;
+
+        console.log(`Shortlisted: ${shortlistedCandidates}, Interviews scheduled: ${interviewsScheduled}`);
         
         // Create time-series data for job trends (last 7 days)
         const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -151,10 +168,12 @@ export default function Home() {
           const jobCandidates = candidates.filter((c: Candidate) => c.job_id === job.id);
           const jobEvaluations = evaluations.filter((e: Evaluation) => e.job_id === job.id);
           
+          const shortlistedCount = jobEvaluations.filter((e: Evaluation) => e.final_score > 70).length;
+          
           return {
             name: job.job_title,
             applicants: jobCandidates.length,
-            shortlisted: jobEvaluations.filter((e: Evaluation) => e.score > 70).length,
+            shortlisted: shortlistedCount,
             timeToHire: Math.floor(Math.random() * 15) + 5 // Simulated data
           };
         });
@@ -182,6 +201,9 @@ export default function Home() {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+  // Function to display percentage change or zero
+
+
   return (
     <div className="overflow-auto p-6">
       <h1 className="text-2xl font-bold mb-6">Hiring Overview</h1>
@@ -203,7 +225,7 @@ export default function Home() {
                 <CardTitle className="text-2xl">{dashboardData.jobsCreated}</CardTitle>
               </CardHeader>
               <CardContent>
-                <span className="text-sm text-muted-foreground">↑ 20% from last period</span>
+                {/* <span className="text-sm text-muted-foreground">{getPercentageDisplay(dashboardData.jobsCreated)}</span> */}
               </CardContent>
             </Card>
             
@@ -213,7 +235,7 @@ export default function Home() {
                 <CardTitle className="text-2xl">{dashboardData.candidatesShortlisted}</CardTitle>
               </CardHeader>
               <CardContent>
-                <span className="text-sm text-muted-foreground">↑ 10% from last period</span>
+                {/* <span className="text-sm text-muted-foreground">{getPercentageDisplay(dashboardData.candidatesShortlisted)}</span> */}
               </CardContent>
             </Card>
             
@@ -223,7 +245,7 @@ export default function Home() {
                 <CardTitle className="text-2xl">{dashboardData.applicantsProcessed}</CardTitle>
               </CardHeader>
               <CardContent>
-                <span className="text-sm text-muted-foreground">↑ 10% from last period</span>
+                {/* <span className="text-sm text-muted-foreground">{getPercentageDisplay(dashboardData.applicantsProcessed)}</span> */}
               </CardContent>
             </Card>
             
@@ -233,7 +255,7 @@ export default function Home() {
                 <CardTitle className="text-2xl">{dashboardData.interviewsScheduled}</CardTitle>
               </CardHeader>
               <CardContent>
-                <span className="text-sm text-muted-foreground">↑ 20% from last period</span>
+                {/* <span className="text-sm text-muted-foreground">{getPercentageDisplay(dashboardData.interviewsScheduled)}</span> */}
               </CardContent>
             </Card>
           </div>

@@ -7,23 +7,23 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogClose,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { 
+import {
   Card,
   CardContent
 } from "@/components/ui/card";
@@ -43,6 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Candidate {
   id: string;
@@ -52,7 +53,7 @@ interface Candidate {
   status?: "Selected" | "Rejected" | null;
   final_score?: number;
   meeting_scheduled?: string | null;
-  resume_url?: string; 
+  resume_url?: string;
 }
 
 interface EvaluationResult {
@@ -94,7 +95,7 @@ interface RecruiterWithSmtp {
 export default function ApplicantsEvaluationPage() {
   const router = useRouter();
   const { toast } = useToast();
-  
+
   // For the multi-step loader (same as in CandidateEvaluation component)
   const loadingStates = [
     { text: "Reviewing resumes...", duration: 8000 },
@@ -103,12 +104,12 @@ export default function ApplicantsEvaluationPage() {
     { text: "Shortlisting candidates...", duration: 20000 },
     { text: "Finalizing the results...", duration: 6000 },
   ];
-  
+
   // Polling configuration constants
   const MAX_RETRY_ATTEMPTS = 3;
   const POLLING_INTERVAL = 3000;
   const MAX_POLLING_ATTEMPTS = 90;
-  
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [evaluations, setEvaluations] = useState<EvaluationResult[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<EvaluationResult | null>(null);
@@ -132,21 +133,21 @@ export default function ApplicantsEvaluationPage() {
   const [selectedDetailsCandidate, setSelectedDetailsCandidate] = useState<any>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  
+
   // Loading states for different actions
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [removingCandidate, setRemovingCandidate] = useState<string | null>(null);
   const [loadingJobDetails, setLoadingJobDetails] = useState(true);
   const [loadingCandidates, setLoadingCandidates] = useState(true);
   const [refreshingData, setRefreshingData] = useState(false);
-  
+
   // New state variables for evaluate more functionality
   const [evaluateMoreDialogOpen, setEvaluateMoreDialogOpen] = useState(false);
   const [evaluatingMore, setEvaluatingMore] = useState(false);
   const [additionalPendingFiles, setAdditionalPendingFiles] = useState<File[]>([]);
   const [additionalIsDragging, setAdditionalIsDragging] = useState(false);
   const [uploadingAdditionalFiles, setUploadingAdditionalFiles] = useState(false);
-  
+
   // New state for dynamic loading states
   const [currentLoadingStates, setCurrentLoadingStates] = useState(loadingStates);
 
@@ -160,7 +161,7 @@ export default function ApplicantsEvaluationPage() {
           },
           body: JSON.stringify({ job_id: jobId }),
         });
-        
+
         const data = await response.json();
         if (data.success && data.cleaned > 0) {
           console.log(`Cleaned up ${data.cleaned} duplicate evaluations`);
@@ -178,17 +179,14 @@ export default function ApplicantsEvaluationPage() {
         title: "Refreshing data",
         description: "Getting the latest data from the database",
       });
-      
+
       if (jobId) {
-        // First clean up any duplicate evaluations
-        await cleanupDuplicateEvaluations();
-        
-        // Then refresh candidate data
+        // Refresh candidate data
         await fetchCandidates(jobId);
-        
+
         // Then refresh evaluation data
         await fetchEvaluations(jobId);
-        
+
         toast({
           title: "Refresh complete",
           description: "Data has been refreshed successfully",
@@ -212,7 +210,7 @@ export default function ApplicantsEvaluationPage() {
       try {
         const response = await fetch(`/api/jobs/${id}`);
         const data = await response.json();
-        
+
         if (data.success && data.job) {
           setJobTitle(data.job.job_title || "");
           setJobDescription(data.job.description || "");
@@ -233,7 +231,7 @@ export default function ApplicantsEvaluationPage() {
       try {
         const response = await fetch(`/api/criteria?job_id=${id}`);
         const data = await response.json();
-        
+
         if (data.success) {
           setCriteria(data.criteria || []);
         }
@@ -254,7 +252,6 @@ export default function ApplicantsEvaluationPage() {
         if (activeJobId) {
           setJobId(activeJobId);
           await fetchCandidates(activeJobId);
-          await cleanupDuplicateEvaluations(); // Clean up duplicates
           await fetchEvaluations(activeJobId);
           await fetchJobDetails(activeJobId);
           await fetchCriteria(activeJobId);
@@ -277,14 +274,14 @@ export default function ApplicantsEvaluationPage() {
     try {
       const response = await fetch(`/api/candidates?job_id=${id}`);
       const data = await response.json();
-      
+
       if (data.success) {
         // Make sure candidates have all required properties
         const processedCandidates = (data.candidates || []).map((candidate: Candidate) => ({
           ...candidate,
           name: candidate.name || candidate.filename?.split('.')[0]?.replace(/_/g, ' ') || "Unnamed Candidate"
         }));
-        
+
         setCandidates(processedCandidates);
       }
     } catch (error) {
@@ -303,11 +300,11 @@ export default function ApplicantsEvaluationPage() {
     try {
       const response = await fetch(`/api/evaluations?job_id=${id}`);
       const data = await response.json();
-      
+
       if (data.success) {
         // We might have duplicate evaluations in the DB, deduplicate them here
         const evaluationMap = new Map<string, EvaluationResult>();
-        
+
         // Process evaluations to ensure they have all required data
         // Use a Map to keep only the latest evaluation for each candidate_id
         (data.evaluations || []).forEach((evaluation: any) => {
@@ -315,27 +312,27 @@ export default function ApplicantsEvaluationPage() {
           if (evaluation.candidates && evaluation.candidates.name) {
             evaluation.name = evaluation.candidates.name;
           }
-          
+
           const typedEval = evaluation as EvaluationResult;
-          
+
           // Check if we already have an evaluation for this candidate
           const existingEval = evaluationMap.get(typedEval.candidate_id);
-          
+
           // If we don't have one yet, or if this one is newer, keep it
-          if (!existingEval || 
-              (typedEval.updated_at && existingEval.updated_at && 
-               new Date(typedEval.updated_at) > new Date(existingEval.updated_at))) {
+          if (!existingEval ||
+            (typedEval.updated_at && existingEval.updated_at &&
+              new Date(typedEval.updated_at) > new Date(existingEval.updated_at))) {
             evaluationMap.set(typedEval.candidate_id, typedEval);
           }
         });
-        
+
         // Convert Map values back to array
         const processedEvaluations = Array.from(evaluationMap.values());
-        
+
         console.log(`Fetched ${data.evaluations?.length} evaluations, deduplicated to ${processedEvaluations.length}`);
-        
+
         setEvaluations(processedEvaluations);
-        
+
         // If there are evaluations, show the results view
         if (processedEvaluations.length > 0) {
           setShowResults(true);
@@ -355,7 +352,7 @@ export default function ApplicantsEvaluationPage() {
     try {
       const response = await fetch('/api/recruiters-with-smtp');
       const data = await response.json();
-      
+
       if (data.success) {
         setRecruiters(data.recruiters || []);
       } else {
@@ -388,7 +385,7 @@ export default function ApplicantsEvaluationPage() {
   const handleAdditionalDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setAdditionalIsDragging(false);
-    
+
     if (e.dataTransfer.files) {
       const newFiles = Array.from(e.dataTransfer.files);
       setAdditionalPendingFiles(prevFiles => [...newFiles, ...prevFiles]);
@@ -415,7 +412,7 @@ export default function ApplicantsEvaluationPage() {
 
   const renderAdditionalFilePreview = () => {
     if (additionalPendingFiles.length === 0) return null;
-    
+
     return (
       <div className="mt-4 w-full max-w-md">
         <h3 className="text-sm font-medium mb-2">Selected Files</h3>
@@ -455,50 +452,48 @@ export default function ApplicantsEvaluationPage() {
       });
       return;
     }
-    
-    // Calculate batches for new candidates
-    const BATCH_SIZE = 10;
-    const totalBatches = Math.ceil(additionalPendingFiles.length / BATCH_SIZE);
-    
-    // Create dynamically scaled loading states based on batch count
-    // Multiply each duration directly by the number of batches
-    const dynamicLoadingStates = loadingStates.map(state => ({
-      text: state.text,
-      duration: state.duration * totalBatches
-    }));
-    
-    // Set the current loading states for the loader component
-    setCurrentLoadingStates(dynamicLoadingStates);
-    
-    setEvaluatingMore(true);
-    setUploadingAdditionalFiles(true);
-    
+
     try {
-      // First, clean up any duplicate evaluations that might already exist
-      await cleanupDuplicateEvaluations();
-      
+      // Calculate batches for new candidates
+      const BATCH_SIZE = 10;
+      const totalBatches = Math.ceil(additionalPendingFiles.length / BATCH_SIZE);
+
+      // Create dynamically scaled loading states based on batch count
+      // Multiply each duration directly by the number of batches
+      const dynamicLoadingStates = loadingStates.map(state => ({
+        text: state.text,
+        duration: state.duration * totalBatches
+      }));
+
+      // Now set the loading state AFTER all the prep work is done
+      setEvaluatingMore(true);
+      setUploadingAdditionalFiles(true);
+
+      // Set the current loading states for the loader component
+      setCurrentLoadingStates(dynamicLoadingStates);
+
       // Show loading toast for upload
       toast({
         title: "Process Started",
         description: `Uploading and evaluating ${additionalPendingFiles.length} file(s). Please wait...`,
       });
-      
+
       // Get userId from client-side cookies
       const userId = Cookies.get('user_id');
-      
+
       if (!userId || !jobId) {
         throw new Error("User not authenticated or job ID missing");
       }
-      
+
       // Process each file
       const uploadPromises = Array.from(additionalPendingFiles).map(async (file) => {
         // Extract filename for display
         const fileName = file.name;
         const displayName = fileName.split('.')[0].replace(/_/g, ' ');
-        
+
         // Upload file to S3
         const { url, fileName: storedFileName, size } = await uploadFileToS3(file, userId, jobId);
-     
+
         // Create candidate in database
         const response = await fetch('/api/candidates', {
           method: 'POST',
@@ -513,116 +508,115 @@ export default function ApplicantsEvaluationPage() {
             resume_url: url
           }),
         });
-        
+
         const data = await response.json();
-        
+
         if (!data.success) {
           throw new Error(data.message || "Failed to create candidate");
         }
-        
+
         // Log candidate creation with job_id for verification
         console.log(`Created new candidate: ${data.candidate.name} with job_id: ${data.candidate.job_id}`);
-        
+
         return data.candidate;
       });
-      
+
       // Wait for all uploads to complete
       const newCandidates = await Promise.all(uploadPromises);
-      
+
       // Update state with new candidates
       setCandidates(prevCandidates => [...prevCandidates, ...newCandidates]);
-      
+
       toast({
         title: "Upload Complete",
         description: `${additionalPendingFiles.length} additional resume(s) uploaded. Starting evaluation...`,
       });
-      
+
       setUploadingAdditionalFiles(false);
-      
+
       // Now evaluate these new candidates using the same process as original evaluation
-      // Calculate batches for new candidates
-      const BATCH_SIZE = 10;
-      const totalBatches = Math.ceil(newCandidates.length / BATCH_SIZE);
-      
+      // Use the same BATCH_SIZE for new evaluation
+      const newBatchCount = Math.ceil(newCandidates.length / BATCH_SIZE);
+
       // Update loading states for the new evaluation
       // Multiply each duration directly by the number of batches
       const newDynamicLoadingStates = loadingStates.map(state => ({
         text: state.text,
-        duration: state.duration * totalBatches
+        duration: state.duration * newBatchCount
       }));
-      
+
       // Update loading states
       setCurrentLoadingStates(newDynamicLoadingStates);
-      
+
       let allResults: any[] = [];
       let processedFilesCount = 0;
-      
+
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const startIdx = batchIndex * BATCH_SIZE;
         const endIdx = Math.min((batchIndex + 1) * BATCH_SIZE, newCandidates.length);
         const batchCandidates = newCandidates.slice(startIdx, endIdx);
-        
+
         // Update toast for current batch
         toast({
           title: `Processing Batch ${batchIndex + 1}/${totalBatches}`,
           description: `Evaluating ${batchCandidates.length} out of ${newCandidates.length} resumes...`,
         });
-      
+
         // Create form data for API call
         const formData = new FormData();
-        
+
         // Get resumes from candidate urls and add to formData
         const candidatePromises = batchCandidates.map(async (candidate) => {
           if (!candidate.resume_url) {
             throw new Error(`Resume URL not found for candidate ${candidate.name}`);
           }
-          
+
           // Use the proxy endpoint instead of fetching directly
           const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
-          
+
           if (!response.ok) {
             throw new Error(`Failed to fetch file: ${response.statusText}`);
           }
-          
+
           const blob = await response.blob();
           const file = new File([blob], candidate.filename, { type: 'application/pdf' });
-          
+
           // Add to formData
           formData.append('pdfs', file);
           formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
           formData.append('candidateNames', candidate.name || ''); // Add candidate names
         });
-        
+
         // Wait for all candidates to be processed
         await Promise.all(candidatePromises);
-        
+
         // Add job details and criteria - use the exact same job details and criteria as original evaluation
         formData.append('jobDetails', JSON.stringify({
           description: jobDescription,
         }));
-        
+
         formData.append('criteria', JSON.stringify(criteria.map(c => ({
           name: c.name || c.criteria,
           description: c.description || c.criteria,
           weight: c.weight || c.weightage
         }))));
-        
+
         // Call the evaluation API
         const evalResponse = await fetch('/api/evaluate', {
           method: 'POST',
           body: formData
         });
-        
+
         if (!evalResponse.ok) {
           throw new Error(`Evaluation API error: ${evalResponse.status}`);
         }
-        
+
         const { jobId: evaluationJobId } = await evalResponse.json();
-        
+
         // Poll for results
         const batchResults = await pollResults(evaluationJobId);
         allResults = [...allResults, ...batchResults];
-        
+
         // Update processed files count and show toast for batch completion
         processedFilesCount += batchCandidates.length;
         toast({
@@ -630,35 +624,35 @@ export default function ApplicantsEvaluationPage() {
           description: `${processedFilesCount} out of ${newCandidates.length} files processed so far.`,
         });
       }
-      
+
       // Process results and save to database
       toast({
         title: "Processing Results",
         description: `Saving evaluation results to database...`,
       });
-      
+
       const evaluationPromises = allResults.map(async (result) => {
         try {
           // Map evaluation results to our database schema
           const candidateId = result.fileId; // fileId contains the candidate ID
-          
+
           // Create criteria results array
           const criteriaResults = result.criteria.map((criterion: any) => ({
-            criteria_id: criteria.find(c => 
-              c.name === criterion.criteria || 
+            criteria_id: criteria.find(c =>
+              c.name === criterion.criteria ||
               c.criteria === criterion.criteria
             )?.id || '',
             score: criterion.score,
             comments: criterion.reason,
             criteria: criterion.criteria
           }));
-          
+
           // Determine final status based on score
           const status = result.status === 'shortlisted' ? "Selected" : "Rejected";
-          
+
           // Extract email from the results
           let extractedEmail = "";
-          
+
           // Check if we have a direct email property
           if (result.email) {
             extractedEmail = result.email;
@@ -674,7 +668,7 @@ export default function ApplicantsEvaluationPage() {
                 }
               }
             });
-            
+
             // If still no email, check in reason
             if (!extractedEmail && result.reason && typeof result.reason === 'string') {
               const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
@@ -684,7 +678,7 @@ export default function ApplicantsEvaluationPage() {
               }
             }
           }
-          
+
           // First, find the candidate to update their name if needed
           const candidate = candidates.find(c => c.id === candidateId);
           if (candidate && result.name && result.name !== "undefined" && result.name !== "Unknown Candidate") {
@@ -699,10 +693,10 @@ export default function ApplicantsEvaluationPage() {
               }),
             });
           }
-          
+
           // Log the extracted email
           console.log(`Extracted email for candidate ${result.name || candidateId}: ${extractedEmail}`);
-          
+
           // Save to database - Use a dedicated endpoint to avoid PostgreSQL errors with multiple rows
           const evalSaveResponse = await fetch('/api/evaluations/create', {
             method: 'POST',
@@ -718,16 +712,16 @@ export default function ApplicantsEvaluationPage() {
               email: extractedEmail
             }),
           });
-          
+
           const evalData = await evalSaveResponse.json();
-          
+
           // Log the evaluation data for debugging
           console.log("Evaluation save response:", evalData);
-          
+
           if (!evalData.success) {
             throw new Error(`Failed to save evaluation for candidate ID ${candidateId}`);
           }
-          
+
           return evalData.evaluation;
         } catch (error) {
           console.error(`Error processing evaluation for candidate ${result.fileId}:`, error);
@@ -735,26 +729,23 @@ export default function ApplicantsEvaluationPage() {
           return null;
         }
       });
-      
+
       // Wait for all evaluations to be saved to the database
       const newEvaluations = await Promise.all(evaluationPromises);
       const validNewEvaluations = newEvaluations.filter(Boolean);
-      
-      // Run cleanup one more time to remove any duplicates that might have been created
-      await cleanupDuplicateEvaluations();
-      
+
       // Explicitly fetch fresh data from the database to ensure we have ALL evaluations
       await fetchEvaluations(jobId);
       await fetchCandidates(jobId);
-      
+
       toast({
         title: "Additional evaluation complete",
         description: `${validNewEvaluations.length} out of ${newCandidates.length} additional candidate(s) evaluated and added to results`,
       });
-      
+
       // Close the dialog
       setEvaluateMoreDialogOpen(false);
-      
+
     } catch (error) {
       console.error('Error evaluating additional files:', error);
       toast({
@@ -785,7 +776,7 @@ export default function ApplicantsEvaluationPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     if (e.dataTransfer.files) {
       // Add new files to existing pending files
       const newFiles = Array.from(e.dataTransfer.files);
@@ -820,7 +811,7 @@ export default function ApplicantsEvaluationPage() {
 
   const renderFilePreview = () => {
     if (pendingFiles.length === 0) return null;
-    
+
     return (
       <div className="mt-4 w-full max-w-md">
         <h3 className="text-sm font-medium mb-2">Selected Files</h3>
@@ -860,32 +851,32 @@ export default function ApplicantsEvaluationPage() {
       });
       return;
     }
-    
+
     setUploadingFiles(true);
-    
+
     try {
       // Show loading toast
       toast({
         title: "Uploading",
         description: `Uploading ${files.length} file(s)...`,
       });
-      
+
       // Get userId from client-side cookies instead of server-side
       const userId = Cookies.get('user_id');
-      
+
       if (!userId) {
         throw new Error("User not authenticated");
       }
-      
+
       // Process each file
       const uploadPromises = Array.from(files).map(async (file) => {
         // Extract filename for display
         const fileName = file.name;
         const displayName = fileName.split('.')[0].replace(/_/g, ' ');
-        
+
         // Upload file to S3
         const { url, fileName: storedFileName, size } = await uploadFileToS3(file, userId, jobId);
-     
+
         // Create candidate in database
         const response = await fetch('/api/candidates', {
           method: 'POST',
@@ -900,22 +891,22 @@ export default function ApplicantsEvaluationPage() {
             resume_url: url
           }),
         });
-        
+
         const data = await response.json();
-        
+
         if (!data.success) {
           throw new Error(data.message || "Failed to create candidate");
         }
-        
+
         return data.candidate;
       });
-      
+
       // Wait for all uploads to complete
       const newCandidates = await Promise.all(uploadPromises);
-      
+
       // Update state with new candidates
       setCandidates([...candidates, ...newCandidates]);
-      
+
       toast({
         title: "Success",
         description: `${files.length} resume(s) added successfully`,
@@ -923,7 +914,7 @@ export default function ApplicantsEvaluationPage() {
 
       // Close the upload dialog only on success
       setUploadDialogOpen(false);
-      
+
     } catch (error) {
       console.error('Error uploading files:', error);
       toast({
@@ -941,22 +932,22 @@ export default function ApplicantsEvaluationPage() {
     try {
       // Find the candidate to get its resume_url
       const candidate = candidates.find(c => c.id === id);
-      
+
       if (!candidate) {
         throw new Error("Candidate not found");
       }
-      
+
       // Delete from database (this will also trigger S3 deletion through our API)
       const response = await fetch(`/api/candidates/${id}`, {
         method: 'DELETE',
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         // Remove from local state
         setCandidates(candidates.filter(c => c.id !== id));
-        
+
         toast({
           title: "Success",
           description: "Candidate has been removed",
@@ -964,7 +955,7 @@ export default function ApplicantsEvaluationPage() {
       } else {
         throw new Error(data.message || "Failed to remove candidate");
       }
-      
+
     } catch (error) {
       console.error('Error removing candidate:', error);
       toast({
@@ -983,14 +974,14 @@ export default function ApplicantsEvaluationPage() {
     let noProgressCount = 0;
     const MAX_NO_PROGRESS = 10; // How many polling attempts with no new results before we warn
     let extractionErrors = 0;
-    
+
     while (attempts < MAX_POLLING_ATTEMPTS) {
       try {
         const response = await fetch(`/api/evaluate/status?jobId=${jobId}`);
         if (!response.ok) throw new Error('JOB_NOT_FOUND');
-  
+
         const data = await response.json();
-        
+
         // Check if there are errors in the job
         if (data.error) {
           try {
@@ -1002,7 +993,7 @@ export default function ApplicantsEvaluationPage() {
                 extractionErrors += pdfErrors.length;
                 console.warn(`${pdfErrors.length} PDF extraction errors detected`);
               }
-              
+
               // Display a toast with the error summary
               toast({
                 title: "Processing Issues",
@@ -1015,17 +1006,17 @@ export default function ApplicantsEvaluationPage() {
             console.error(`Error in job: ${data.error}`);
           }
         }
-  
+
         // If job is completed or has an error, return results
         if (data.status === 'completed' || data.status === 'error') {
           const results = data.result || [];
-          
+
           // Check for PDF extraction issues and notify user
-          const extractionFailures = results.filter((r: any) => 
-            (r.reason && r.reason.toLowerCase().includes('pdf extraction')) || 
+          const extractionFailures = results.filter((r: any) =>
+            (r.reason && r.reason.toLowerCase().includes('pdf extraction')) ||
             (r.criteria && r.criteria.some((c: any) => c.reason && c.reason.toLowerCase().includes('pdf extraction')))
           );
-          
+
           if (extractionFailures.length > 0) {
             toast({
               title: "PDF Extraction Issues",
@@ -1033,26 +1024,26 @@ export default function ApplicantsEvaluationPage() {
               variant: "default"
             });
           }
-          
+
           return results;
         }
-  
+
         // If still processing, check progress
         if (data.status === 'processing' && data.result) {
           const currentResultCount = data.result.length;
-          
+
           // If we have new results, reset the no progress counter
           if (currentResultCount > previousResultCount) {
             previousResultCount = currentResultCount;
             noProgressCount = 0;
-            
+
             // Check if the new results have PDF extraction issues
             const newResults = data.result.slice(previousResultCount);
-            const pdfIssuesCount = newResults.filter((r: any) => 
-              (r.reason && r.reason.toLowerCase().includes('pdf extraction')) || 
+            const pdfIssuesCount = newResults.filter((r: any) =>
+              (r.reason && r.reason.toLowerCase().includes('pdf extraction')) ||
               (r.criteria && r.criteria.some((c: any) => c.reason && c.reason.toLowerCase().includes('pdf extraction')))
             ).length;
-            
+
             if (pdfIssuesCount > 0) {
               extractionErrors += pdfIssuesCount;
             }
@@ -1060,7 +1051,7 @@ export default function ApplicantsEvaluationPage() {
             noProgressCount++;
           }
 
-          
+
           // If we have partial results and have been polling for a while, return them
           if (currentResultCount > 0 && attempts > MAX_POLLING_ATTEMPTS / 2) {
             toast({
@@ -1071,13 +1062,13 @@ export default function ApplicantsEvaluationPage() {
             return data.result;
           }
         }
-        
+
         // Wait before polling again
         await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         attempts++;
       } catch (error) {
         console.error('Error polling job status:', error);
-        
+
         // If we've been polling for a while and have an error, just stop and show what we have
         if (attempts > MAX_POLLING_ATTEMPTS / 2) {
           toast({
@@ -1085,7 +1076,7 @@ export default function ApplicantsEvaluationPage() {
             description: "Showing available results. Some candidates may not be evaluated.",
             variant: "destructive"
           });
-          
+
           // Try one more time to get partial results
           try {
             const finalResponse = await fetch(`/api/evaluate/status?jobId=${jobId}`);
@@ -1097,16 +1088,16 @@ export default function ApplicantsEvaluationPage() {
             // Ignore this error
             console.error("Error getting final results:", fetchError);
           }
-          
+
           return [];
         }
-        
+
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         attempts++;
       }
     }
-    
+
     // If we reach max attempts, return whatever results we have
     try {
       const response = await fetch(`/api/evaluate/status?jobId=${jobId}`);
@@ -1127,11 +1118,11 @@ export default function ApplicantsEvaluationPage() {
       });
       return;
     }
-    
+
     if (candidates.length === 0) {
       toast({
-        title: "Error",
-        description: "Please upload at least one resume",
+        title: "No candidates",
+        description: "Please upload candidate resumes first",
         variant: "destructive",
       });
       return;
@@ -1139,121 +1130,128 @@ export default function ApplicantsEvaluationPage() {
 
     if (criteria.length === 0) {
       toast({
-        title: "Error",
-        description: "No evaluation criteria found. Please add criteria first.",
+        title: "No criteria",
+        description: "Please add evaluation criteria first",
         variant: "destructive",
       });
       return;
     }
-    
-    // Calculate the number of batches needed (10 files per batch)
-    const BATCH_SIZE = 10;
-    const totalBatches = Math.ceil(candidates.length / BATCH_SIZE);
-    
-    // Create dynamically scaled loading states based on batch count
-    // Multiply each duration directly by the number of batches
-    const dynamicLoadingStates = loadingStates.map(state => ({
-      text: state.text,
-      duration: state.duration * totalBatches
-    }));
-    
-    // Set the current loading states for the loader component
-    setCurrentLoadingStates(dynamicLoadingStates);
-    
-    // Start evaluation
-    setIsEvaluating(true);
-    
+
     try {
-      // First, clean up any duplicate evaluations that might already exist
-      await cleanupDuplicateEvaluations();
-      
+      // First, update the job's current step to mark the job as complete
+      await fetch(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          current_step: "applicants" // Keep it on the current step as it's the final step
+        }),
+      });
+
+      // Calculate the number of batches needed (10 files per batch)
+      const BATCH_SIZE = 10;
+      const totalBatches = Math.ceil(candidates.length / BATCH_SIZE);
+
+      // Create dynamically scaled loading states based on batch count
+      // Multiply each duration directly by the number of batches
+      const dynamicLoadingStates = loadingStates.map(state => ({
+        text: state.text,
+        duration: state.duration * totalBatches
+      }));
+
       // Make sure we have the latest candidates from the database before evaluating
       await fetchCandidates(jobId);
+
+      // Now set the loading state AFTER all the prep work is done
+      setIsEvaluating(true);
       
+      // Set the current loading states for the loader component
+      setCurrentLoadingStates(dynamicLoadingStates);
+
       // Show a detailed toast about processing start
       toast({
         title: "Process Started",
         description: `Evaluating ${candidates.length} resumes in ${totalBatches} batch(es). Please wait...`,
       });
-      
+
       // Get userId from client-side cookies 
       const userId = Cookies.get('user_id');
-      
+
       if (!userId) {
         throw new Error("User not authenticated");
       }
-      
-      // Process candidates in batches
+
       let allResults: any[] = [];
       let processedFilesCount = 0;
-      
+
       // Split candidates into batches of BATCH_SIZE
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const startIdx = batchIndex * BATCH_SIZE;
         const endIdx = Math.min((batchIndex + 1) * BATCH_SIZE, candidates.length);
         const batchCandidates = candidates.slice(startIdx, endIdx);
-        
+
         // Update toast for current batch
         toast({
           title: `Processing Batch ${batchIndex + 1}/${totalBatches}`,
           description: `Evaluating ${batchCandidates.length} out of ${candidates.length} resumes...`,
         });
-        
+
         // Create form data for API call
         const formData = new FormData();
-        
+
         // Get resumes from candidate urls and add to formData
         const candidatePromises = batchCandidates.map(async (candidate) => {
           if (!candidate.resume_url) {
             throw new Error(`Resume URL not found for candidate ${candidate.name}`);
           }
-          
+
           // Use the proxy endpoint instead of fetching directly
           const response = await fetch(`/api/proxy-file?url=${encodeURIComponent(candidate.resume_url)}`);
-          
+
           if (!response.ok) {
             throw new Error(`Failed to fetch file: ${response.statusText}`);
           }
-          
+
           const blob = await response.blob();
           const file = new File([blob], candidate.filename, { type: 'application/pdf' });
-          
+
           // Add to formData
           formData.append('pdfs', file);
           formData.append('fileIds', candidate.id); // Using candidate ID as the fileId
           formData.append('candidateNames', candidate.name || ''); // Add candidate names
         });
-        
+
         // Wait for all candidates in the batch to be processed
         await Promise.all(candidatePromises);
-        
+
         // Add job details and criteria
         formData.append('jobDetails', JSON.stringify({
           description: jobDescription,
         }));
-        
+
         formData.append('criteria', JSON.stringify(criteria.map(c => ({
           name: c.name || c.criteria,
           description: c.description || c.criteria,
           weight: c.weight || c.weightage
         }))));
-        
+
         // Call the evaluation API for this batch
         const evalResponse = await fetch('/api/evaluate', {
           method: 'POST',
           body: formData
         });
-        
+
         if (!evalResponse.ok) {
           throw new Error(`Evaluation API error: ${evalResponse.status}`);
         }
-        
+
         const { jobId: evaluationJobId } = await evalResponse.json();
-        
+
         // Poll for results for this batch
         const batchResults = await pollResults(evaluationJobId);
         allResults = [...allResults, ...batchResults];
-        
+
         // Update processed files count and show toast for batch completion
         processedFilesCount += batchCandidates.length;
         toast({
@@ -1261,35 +1259,35 @@ export default function ApplicantsEvaluationPage() {
           description: `${processedFilesCount} out of ${candidates.length} files processed so far.`,
         });
       }
-      
+
       // Process all results and save to database
       toast({
         title: "Processing Results",
         description: `Saving evaluation results to database...`,
       });
-      
+
       const evaluationPromises = allResults.map(async (result) => {
         try {
           // Map evaluation results to our database schema
           const candidateId = result.fileId; // fileId contains the candidate ID
-          
+
           // Create criteria results array
           const criteriaResults = result.criteria.map((criterion: any) => ({
-            criteria_id: criteria.find(c => 
-              c.name === criterion.criteria || 
+            criteria_id: criteria.find(c =>
+              c.name === criterion.criteria ||
               c.criteria === criterion.criteria
             )?.id || '',
             score: criterion.score,
             comments: criterion.reason,
             criteria: criterion.criteria
           }));
-          
+
           // Determine final status based on score
           const status = result.status === 'shortlisted' ? "Selected" : "Rejected";
-          
+
           // Extract email from the results
           let extractedEmail = "";
-          
+
           // Check if we have a direct email property
           if (result.email) {
             extractedEmail = result.email;
@@ -1305,7 +1303,7 @@ export default function ApplicantsEvaluationPage() {
                 }
               }
             });
-            
+
             // If still no email, check in reason
             if (!extractedEmail && result.reason && typeof result.reason === 'string') {
               const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
@@ -1315,7 +1313,7 @@ export default function ApplicantsEvaluationPage() {
               }
             }
           }
-          
+
           // First, find the candidate to update their name if needed
           const candidate = candidates.find(c => c.id === candidateId);
           if (candidate && result.name && result.name !== "undefined" && result.name !== "Unknown Candidate") {
@@ -1330,10 +1328,10 @@ export default function ApplicantsEvaluationPage() {
               }),
             });
           }
-          
+
           // Log the extracted email
           console.log(`Extracted email for candidate ${result.name || candidateId}: ${extractedEmail}`);
-          
+
           // Save to database - Use a dedicated endpoint to avoid PostgreSQL errors with multiple rows
           const evalSaveResponse = await fetch('/api/evaluations/create', {
             method: 'POST',
@@ -1349,16 +1347,16 @@ export default function ApplicantsEvaluationPage() {
               email: extractedEmail
             }),
           });
-          
+
           const evalData = await evalSaveResponse.json();
-          
+
           // Log the evaluation data for debugging
           console.log("Evaluation save response:", evalData);
-          
+
           if (!evalData.success) {
             throw new Error(`Failed to save evaluation for candidate ID ${candidateId}`);
           }
-          
+
           return evalData.evaluation;
         } catch (error) {
           console.error(`Error processing evaluation for candidate ${result.fileId}:`, error);
@@ -1366,26 +1364,22 @@ export default function ApplicantsEvaluationPage() {
           return null;
         }
       });
-      
+
       // Wait for all evaluations to be saved to the database
       const savedEvaluations = await Promise.all(evaluationPromises);
       const validEvaluations = savedEvaluations.filter(Boolean);
-      
-      // Run cleanup one more time to remove any duplicates that might have been created
-      await cleanupDuplicateEvaluations();
-      
+
       // Explicitly fetch fresh data from the database to ensure we have the latest state
       await fetchEvaluations(jobId);
       await fetchCandidates(jobId);
-      
+
       // Show results view
       setShowResults(true);
-      
+
       toast({
         title: "Evaluation complete",
         description: `${validEvaluations.length} out of ${candidates.length} candidate(s) evaluated successfully`,
       });
-      
     } catch (error) {
       console.error("Error evaluating candidates:", error);
       toast({
@@ -1394,6 +1388,7 @@ export default function ApplicantsEvaluationPage() {
         variant: "destructive",
       });
     } finally {
+      // Make sure to set isEvaluating to false in finally block
       setIsEvaluating(false);
     }
   };
@@ -1401,18 +1396,18 @@ export default function ApplicantsEvaluationPage() {
   const handleScheduleClick = (candidateId: string, candidateName: string) => {
     setSelectedCandidateId(candidateId);
     setSelectedCandidateName(candidateName);
-    
+
     // Find the evaluation and candidate for this ID
     const evaluation = evaluations.find(e => e.candidate_id === candidateId);
     const candidate = candidates.find(c => c.id === candidateId);
-    
+
     // Console log the data to see what we've got
     console.log("Evaluation data for scheduling:", evaluation);
     console.log("Candidate data for scheduling:", candidate);
-    
+
     // Look for email in the evaluation data
     let emailToUse = "";
-    
+
     if (evaluation) {
       // Check if we have a direct email property 
       if (evaluation.email) {
@@ -1420,7 +1415,7 @@ export default function ApplicantsEvaluationPage() {
       } else {
         // Look for email in criteria or results
         let foundEmail = "";
-        
+
         // Check in criteria array
         if (evaluation.criteria && Array.isArray(evaluation.criteria)) {
           evaluation.criteria.forEach(criterion => {
@@ -1434,11 +1429,11 @@ export default function ApplicantsEvaluationPage() {
             }
           });
         }
-        
+
         // Check in result data
         if (!foundEmail && evaluation.result) {
           let resultData = evaluation.result;
-          
+
           // Check if result is a string (JSON string from DB) and parse it
           if (typeof resultData === 'string') {
             try {
@@ -1447,7 +1442,7 @@ export default function ApplicantsEvaluationPage() {
               console.error("Error parsing result JSON:", e);
             }
           }
-          
+
           if (Array.isArray(resultData)) {
             resultData.forEach(result => {
               if (result.comments && typeof result.comments === 'string') {
@@ -1461,17 +1456,17 @@ export default function ApplicantsEvaluationPage() {
             });
           }
         }
-        
+
         // Set the email if found
         if (foundEmail) {
           emailToUse = foundEmail;
         }
       }
     }
-    
+
     // Set the email for the form
     setCandidateEmail(emailToUse);
-    
+
     // Fetch recruiters for the dialog
     fetchRecruiters();
     setScheduleDialogOpen(true);
@@ -1486,9 +1481,9 @@ export default function ApplicantsEvaluationPage() {
       });
       return;
     }
-    
+
     setSending(true);
-    
+
     try {
       // Send the email
       const emailResponse = await fetch('/api/send-email', {
@@ -1505,13 +1500,13 @@ export default function ApplicantsEvaluationPage() {
           message: emailMessage
         }),
       });
-      
+
       const emailData = await emailResponse.json();
-      
+
       if (!emailData.success) {
         throw new Error(emailData.message || 'Failed to send email');
       }
-      
+
       // Update the candidate record to mark as scheduled
       const updateResponse = await fetch(`/api/candidates/${selectedCandidateId}`, {
         method: 'PATCH',
@@ -1522,13 +1517,13 @@ export default function ApplicantsEvaluationPage() {
           meeting_scheduled: true
         }),
       });
-      
+
       const updateData = await updateResponse.json();
-      
+
       if (!updateData.success) {
         throw new Error(updateData.message || 'Failed to update candidate');
       }
-      
+
       // Update local state
       setEvaluations(evaluations.map(evaluation => {
         if (evaluation.candidate_id === selectedCandidateId) {
@@ -1539,19 +1534,19 @@ export default function ApplicantsEvaluationPage() {
         }
         return evaluation;
       }));
-      
+
       toast({
         title: "Success",
         description: "Interview scheduled and email sent successfully"
       });
-      
+
       // Reset form
       setSelectedRecruiter("");
       setCandidateEmail("");
       setCcEmail("");
       setEmailMessage("");
       setScheduleDialogOpen(false);
-      
+
     } catch (error: unknown) {
       console.error('Error scheduling interview:', error);
       toast({
@@ -1565,6 +1560,30 @@ export default function ApplicantsEvaluationPage() {
   };
 
   const startNewEvaluation = () => {
+    // Clear all localStorage values related to job creation
+    localStorage.removeItem("activeJobId");
+    localStorage.removeItem("selectedJobDescription");
+    localStorage.removeItem("jobTitle");
+    localStorage.removeItem("jobDescription");
+    localStorage.removeItem("jobRequirements");
+    localStorage.removeItem("criteria");
+    localStorage.removeItem("currentStep");
+    localStorage.removeItem("completedSteps");
+    
+    // Clear session storage values as well
+    sessionStorage.removeItem("evaluationResults");
+    sessionStorage.removeItem("isEvaluating");
+    sessionStorage.removeItem("showResults");
+    sessionStorage.removeItem("currentLoadingStates");
+    
+    // Reset all state values
+    setIsEvaluating(false);
+    setShowResults(false);
+    setCandidates([]);
+    setEvaluations([]);
+    setCurrentLoadingStates(loadingStates);
+    
+    // Navigate to jobs page
     router.push('/jobs');
   };
 
@@ -1591,9 +1610,9 @@ export default function ApplicantsEvaluationPage() {
           <DialogHeader>
             <DialogTitle>Upload Resumes</DialogTitle>
           </DialogHeader>
-          
+
           <div className="py-4">
-            <div 
+            <div
               className={`w-full h-40 border-2 ${isDragging ? 'border-primary' : 'border-dashed'} rounded-lg flex flex-col items-center justify-center mb-4 cursor-pointer`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -1608,7 +1627,7 @@ export default function ApplicantsEvaluationPage() {
                 .pdf files (max 5MB)
               </p>
             </div>
-            
+
             <input
               type="file"
               id="modal-resume-upload"
@@ -1617,17 +1636,17 @@ export default function ApplicantsEvaluationPage() {
               className="hidden"
               onChange={handleFileInput}
             />
-            
+
             {renderFilePreview()}
           </div>
-          
+
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" disabled={uploadingFiles}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button 
+            <Button
               onClick={confirmUpload}
               disabled={uploadingFiles || pendingFiles.length === 0}
               className="bg-primary text-white"
@@ -1657,9 +1676,9 @@ export default function ApplicantsEvaluationPage() {
           <DialogHeader>
             <DialogTitle>Evaluate More Resumes</DialogTitle>
           </DialogHeader>
-          
+
           <div className="py-4">
-            <div 
+            <div
               className={`w-full h-40 border-2 ${additionalIsDragging ? 'border-primary' : 'border-dashed'} rounded-lg flex flex-col items-center justify-center mb-4 cursor-pointer`}
               onDragOver={handleAdditionalDragOver}
               onDragLeave={handleAdditionalDragLeave}
@@ -1674,7 +1693,7 @@ export default function ApplicantsEvaluationPage() {
                 .pdf files (max 5MB)
               </p>
             </div>
-            
+
             <input
               type="file"
               id="additional-resume-upload"
@@ -1683,17 +1702,17 @@ export default function ApplicantsEvaluationPage() {
               className="hidden"
               onChange={handleAdditionalFileInput}
             />
-            
+
             {renderAdditionalFilePreview()}
           </div>
-          
+
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" disabled={evaluatingMore}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button 
+            <Button
               onClick={uploadAndEvaluateMoreFiles}
               disabled={evaluatingMore || additionalPendingFiles.length === 0}
               className="bg-primary text-white"
@@ -1729,9 +1748,9 @@ export default function ApplicantsEvaluationPage() {
   if (isEvaluating) {
     return (
       <div className="h-[90%] flex justify-center items-center">
-        <MultiStepLoader 
-          loadingStates={currentLoadingStates} 
-          loading={true} 
+        <MultiStepLoader
+          loadingStates={currentLoadingStates}
+          loading={true}
           loop={false}
         />
       </div>
@@ -1744,10 +1763,10 @@ export default function ApplicantsEvaluationPage() {
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-lg font-medium">Evaluation Results</h2>
           <div className="flex gap-2">
-           
-            
 
-            <Button 
+
+
+            <Button
               variant="outline"
               onClick={openEvaluateMoreDialog}
               disabled={evaluatingMore}
@@ -1764,21 +1783,21 @@ export default function ApplicantsEvaluationPage() {
                 </>
               )}
             </Button>
-            <Button 
-              variant="default" 
+            <Button
+              variant="default"
               onClick={startNewEvaluation}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               Start New Evaluation
             </Button>
-                        <DropdownMenu>
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="cursor-pointer" size="icon">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-             
+
                 <DropdownMenuItem onClick={() => evaluateCandidates()} disabled={isEvaluating}>
                   {isEvaluating ? (
                     <>
@@ -1809,7 +1828,7 @@ export default function ApplicantsEvaluationPage() {
             </DropdownMenu>
           </div>
         </div>
-        
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -1826,18 +1845,18 @@ export default function ApplicantsEvaluationPage() {
             {evaluations.map((evaluation) => {
               const candidate = candidates.find(c => c.id === evaluation.candidate_id);
               const displayName = candidate?.name || evaluation.name || "Unnamed Candidate";
-              
+
               return (
                 <TableRow key={evaluation.id}>
                   <TableCell className="font-medium text-center">{displayName}</TableCell>
-                  <TableCell className="text-center">{evaluation.final_score || evaluation["Final score"]|| evaluation["final_score"]}</TableCell>
+                  <TableCell className="text-center">{evaluation.final_score || evaluation["Final score"] || evaluation["final_score"]}</TableCell>
                   <TableCell className="text-center">
                     <span className={cn(
                       "flex items-center justify-center gap-2",
                       evaluation.status === "Selected" ? "text-green-600" : "text-red-600"
                     )}>
-                      {evaluation.status === "Selected" ? 
-                        <CheckCircle className="h-4 w-4" /> : 
+                      {evaluation.status === "Selected" ?
+                        <CheckCircle className="h-4 w-4" /> :
                         <XCircle className="h-4 w-4" />
                       }
                       {evaluation.status || '-'}
@@ -1878,12 +1897,12 @@ export default function ApplicantsEvaluationPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     {evaluation.status === "Selected" && !evaluation.meeting_scheduled && (
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="text-xs h-7 px-2 my-auto mx-auto"
                         onClick={() => handleScheduleClick(
-                          evaluation.candidate_id, 
+                          evaluation.candidate_id,
                           displayName
                         )}
                       >
@@ -1905,7 +1924,7 @@ export default function ApplicantsEvaluationPage() {
             </DialogHeader>
             <div className="mt-4 space-y-4">
               <h3 className="font-semibold">
-                <span className="text-green-700">{selectedDetailsCandidate?.status }</span> - {selectedDetailsCandidate?.final_score || selectedDetailsCandidate?.["Final score"] || selectedDetailsCandidate?.["final_score"]}%
+                <span className="text-green-700">{selectedDetailsCandidate?.status}</span> - {selectedDetailsCandidate?.final_score || selectedDetailsCandidate?.["Final score"] || selectedDetailsCandidate?.["final_score"]}%
               </h3>
               <p className="text-muted-foreground">{selectedDetailsCandidate?.reason}</p>
 
@@ -1919,7 +1938,7 @@ export default function ApplicantsEvaluationPage() {
                 ))}
                 {(() => {
                   let resultData = selectedDetailsCandidate?.result || [];
-                  
+
                   // Check if result is a string (JSON string from DB) and parse it
                   if (typeof resultData === 'string') {
                     try {
@@ -1929,17 +1948,17 @@ export default function ApplicantsEvaluationPage() {
                       resultData = [];
                     }
                   }
-                  
+
                   return Array.isArray(resultData) ? resultData.map((result: any, index: number) => {
                     // Try to determine criterion name
                     let criterionName = 'Criterion';
-                    
+
                     if (result.criteria_id && criteria.find(c => c.id === result.criteria_id)) {
-                      criterionName = criteria.find(c => c.id === result.criteria_id)?.criteria || 
-                                      criteria.find(c => c.id === result.criteria_id)?.name || 
-                                      'Criterion';
+                      criterionName = criteria.find(c => c.id === result.criteria_id)?.criteria ||
+                        criteria.find(c => c.id === result.criteria_id)?.name ||
+                        'Criterion';
                     }
-                    
+
                     return (
                       <div key={`result-${index}`} className="border-b pb-2">
                         <div className="font-medium">{result.criteria} - {result.score}/10</div>
@@ -1959,7 +1978,7 @@ export default function ApplicantsEvaluationPage() {
             <DialogHeader>
               <DialogTitle>Schedule Interview</DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="recruiter">Select Recruiter</Label>
@@ -1970,8 +1989,8 @@ export default function ApplicantsEvaluationPage() {
                   <SelectContent>
                     {recruiters.length > 0 ? (
                       recruiters.map((recruiter) => (
-                        <SelectItem 
-                          key={recruiter.id} 
+                        <SelectItem
+                          key={recruiter.id}
                           value={recruiter.id}
                           disabled={!recruiter.has_smtp}
                         >
@@ -1988,8 +2007,16 @@ export default function ApplicantsEvaluationPage() {
                     )}
                   </SelectContent>
                 </Select>
+                <Alert className="mt-2 bg-muted">
+                  <AlertDescription>
+                    <span className="text-sm" >Manage your recruiters and set up SMTP for them. </span>
+                    <span className="text-sm text-blue-500 hover:underline cursor-pointer" onClick={() => router.push('/settings?tab=recruiters')}>
+                      Go to Settings
+                    </span>
+                  </AlertDescription>
+                </Alert>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="candidate_email">Candidate Email</Label>
                 <Input
@@ -1999,7 +2026,7 @@ export default function ApplicantsEvaluationPage() {
                   placeholder="candidate@example.com"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="cc_email">CC Mail ID</Label>
                 <Input
@@ -2009,7 +2036,7 @@ export default function ApplicantsEvaluationPage() {
                   placeholder="Placeholder"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="message">Additional Message (Optional)</Label>
                 <Textarea
@@ -2021,7 +2048,7 @@ export default function ApplicantsEvaluationPage() {
                 />
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <DialogClose asChild>
                 <Button variant="outline">Cancel</Button>
@@ -2042,7 +2069,7 @@ export default function ApplicantsEvaluationPage() {
 
         {/* Render Upload Dialog */}
         {renderUploadDialog()}
-        
+
         {/* Evaluate More Dialog */}
         {renderEvaluateMoreDialog()}
       </div>
@@ -2053,7 +2080,7 @@ export default function ApplicantsEvaluationPage() {
   if (candidates.length === 0) {
     return (
       <div className="w-full flex flex-col items-center justify-center py-12">
-        <div 
+        <div
           className={`w-full max-w-md h-40 border-2 ${isDragging ? 'border-primary' : 'border-dashed'} rounded-lg flex flex-col items-center justify-center mb-4 cursor-pointer`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -2068,7 +2095,7 @@ export default function ApplicantsEvaluationPage() {
             .pdf files (max 5MB)
           </p>
         </div>
-        
+
         {pendingFiles.length === 0 && !uploadingFiles ? (
           <div className="text-center">
             <input
@@ -2088,14 +2115,14 @@ export default function ApplicantsEvaluationPage() {
           </div>
         ) : pendingFiles.length > 0 && !uploadingFiles && (
           <div className="text-center flex flex-col items-center gap-3">
-            <button 
-              onClick={() => handleFiles(pendingFiles as unknown as FileList)} 
+            <button
+              onClick={() => handleFiles(pendingFiles as unknown as FileList)}
               className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-md text-white"
             >
               <FileUp className="mr-2 h-4 w-4 inline" />
               Upload {pendingFiles.length} file(s)
             </button>
-            <button 
+            <button
               onClick={handleDropAreaClick}
               className="text-indigo-500 hover:text-indigo-600 text-sm"
             >
@@ -2111,14 +2138,14 @@ export default function ApplicantsEvaluationPage() {
             />
           </div>
         )}
-        
+
         {uploadingFiles && (
           <div className="text-center mt-4">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
             <p className="text-sm text-muted-foreground">Uploading files...</p>
           </div>
         )}
-        
+
         {renderFilePreview()}
       </div>
     );
@@ -2130,27 +2157,27 @@ export default function ApplicantsEvaluationPage() {
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-lg font-medium">Applicants Evaluation</h2>
         <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="text-gray-700"
             onClick={openUploadDialog}
             disabled={uploadingFiles}
           >
             {uploadingFiles ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 Uploading...
               </>
             ) : (
               <>
-                <FileUp className="mr-2 h-4 w-4" />
-                Select File
+                <FileUp className="mr-1 h-4 w-4" />
+                Add More Resume
               </>
             )}
           </Button>
-          <Button 
-            className="bg-primary text-white" 
-            onClick={evaluateCandidates} 
+          <Button
+            className="bg-primary text-white"
+            onClick={evaluateCandidates}
             disabled={isEvaluating || candidates.length === 0}
           >
             {isEvaluating ? (
@@ -2164,7 +2191,7 @@ export default function ApplicantsEvaluationPage() {
           </Button>
         </div>
       </div>
-      
+
       <div className="space-y-3">
         {candidates.map((candidate) => (
           <div key={candidate.id} className="flex items-center py-2 px-3 border-b">
@@ -2193,7 +2220,7 @@ export default function ApplicantsEvaluationPage() {
           </div>
         ))}
       </div>
-      
+
       {/* Render Upload Dialog */}
       {renderUploadDialog()}
     </div>

@@ -32,7 +32,11 @@ export default function JobsPage() {
         const data = await response.json();
 
         if (data.success) {
-          setJobs(data.jobs || []);
+          // Sort jobs in descending order by created_at date
+          const sortedJobs = [...(data.jobs || [])].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          setJobs(sortedJobs);
         }
       } catch (error) {
         console.error('Error fetching jobs:', error);
@@ -45,8 +49,23 @@ export default function JobsPage() {
   }, []);
 
   const handleCreateJob = () => {
-    // Clear the activeJobId from localStorage to ensure a fresh start
+    // Clear all localStorage values related to job creation
     localStorage.removeItem("activeJobId");
+    localStorage.removeItem("selectedJobDescription");
+    localStorage.removeItem("jobTitle");
+    localStorage.removeItem("jobDescription");
+    localStorage.removeItem("jobRequirements");
+    localStorage.removeItem("criteria");
+    localStorage.removeItem("currentStep");
+    localStorage.removeItem("completedSteps");
+    
+    // Clear session storage values as well
+    sessionStorage.removeItem("evaluationResults");
+    sessionStorage.removeItem("isEvaluating");
+    sessionStorage.removeItem("showResults");
+    sessionStorage.removeItem("currentLoadingStates");
+    
+    // Navigate to the first step
     router.push('/jobs/create/details');
   };
 
@@ -69,11 +88,17 @@ export default function JobsPage() {
       let targetStep = '/jobs/create/details';
       
       if (job.current_step) {
-        // If job has a stored step, navigate to that step
-        targetStep = job.current_step;
+        // If job has a stored step, navigate to that step based on the simple name
+        if (job.current_step === "details") {
+          targetStep = '/jobs/create/details';
+        } else if (job.current_step === "criteria") {
+          targetStep = '/jobs/create/criteria';
+        } else if (job.current_step === "applicants") {
+          targetStep = '/jobs/create/applicants';
+        }
       } else {
         // If no current step is set, update the job with the first step
-        await updateJobStep(jobId, targetStep);
+        await updateJobStep(jobId, "details");
       }
       
       // Navigate to the appropriate step
@@ -156,7 +181,7 @@ export default function JobsPage() {
               Create New Job
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto pb-6">
             {jobs.map((job) => (
               <Card key={job.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full border border-gray-200 group relative ">
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ">
@@ -178,6 +203,32 @@ export default function JobsPage() {
                         ? job.description.substring(0, 150) + '...'
                         : job.description}
                     </p>
+                    {job.current_step && (
+                      <div className="mt-3">
+                        <div className="flex items-center">
+                          {/* <span className="text-xs font-medium text-indigo-600">Current step: </span> */}
+                          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {job.current_step === "details" 
+                              ? "Job Details" 
+                              : job.current_step === "criteria"
+                                ? "Evaluation Criteria"
+                                : "Applicants Evaluation"}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+                          <div 
+                            className="bg-indigo-500 h-1.5 rounded-full" 
+                            style={{ 
+                              width: job.current_step === "details" 
+                                ? "33%" 
+                                : job.current_step === "criteria" 
+                                  ? "66%" 
+                                  : "100%" 
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </div>
                 <CardFooter className="flex justify-between items-center pt-4 border-t border-gray-100">

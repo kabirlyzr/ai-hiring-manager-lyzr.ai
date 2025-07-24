@@ -22,6 +22,13 @@ interface JobDescription {
   created_at: string;
 }
 
+interface CompanyData {
+  id?: string;
+  company_name: string;
+  website: string;
+  description: string;
+}
+
 export default function JobDescriptionsPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -40,10 +47,40 @@ export default function JobDescriptionsPage() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingRequirements, setEditingRequirements] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [companyData, setCompanyData] = useState<CompanyData>({
+    company_name: "",
+    website: "",
+    description: ""
+  });
 
   useEffect(() => {
     fetchJobDescriptions();
+    fetchCompanyData();
   }, []);
+
+  const fetchCompanyData = async () => {
+    try {
+      const response = await fetch('/api/company');
+      const data = await response.json();
+
+      if (data.success && data.companies?.length > 0) {
+        const company = data.companies[0];
+        setCompanyData({
+          id: company.id,
+          company_name: company.company_name || "",
+          website: company.website || "",
+          description: company.description || ""
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching company data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load company data",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchJobDescriptions = async () => {
     try {
@@ -80,13 +117,22 @@ export default function JobDescriptionsPage() {
 
     setIsGenerating(true);
     try {
+      const companyInfo = `
+Company Name: ${companyData.company_name}
+Company Website: ${companyData.website}
+About the Company: ${companyData.description}
+`;
+      
       const response = await fetch('/api/job-description', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: `Generate a job description for ${jobTitle} with these requirements: ${jobRequirements}`,
+          message: `Generate a job description for ${jobTitle} with these requirements: ${jobRequirements}. 
+          
+Here is information about the company that should be incorporated into the job description:
+${companyInfo}`,
           sessionId: null
         }),
       });
@@ -125,13 +171,19 @@ export default function JobDescriptionsPage() {
 
     setIsGenerating(true);
     try {
+      const companyInfo = `
+Company Name: ${companyData.company_name}
+Company Website: ${companyData.website}
+About the Company: ${companyData.description}
+`;
+
       const response = await fetch('/api/job-description', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: `Job Description:\n\n${generatedDescription}\n\nFeedback:\n\n${feedback}\n`,
+          message: `Job Description:\n\n${generatedDescription}\n\nFeedback:\n\n${feedback}\n\nCompany Information:\n${companyInfo}`,
           sessionId: sessionId
         }),
       });
