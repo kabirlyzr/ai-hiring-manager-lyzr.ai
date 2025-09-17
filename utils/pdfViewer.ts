@@ -22,8 +22,8 @@ export async function extractTextFromPDF(file: File): Promise<string> {
     formData.append('file', processedFile);
     
     // Get API key from cookies
-    const apiKey = Cookies.get('token') || 'sk-default-L5Ej0XEwfj2Xlvl09Gc1xAGYZvX2lVLA';
-    
+    const apiKey = Cookies.get('token') || '';
+
     // Make API request
     const url = `https://lyzr-ocr.lyzr.app/extract?api_key=${encodeURIComponent(apiKey)}`;
     const response = await fetch(url, {
