@@ -151,7 +151,7 @@ Resume Upload → PDF Processing → AI Evaluation → Results & Feedback
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd master-ai-hiring-manager-3i
+   cd ai-hiring-manager-lyzr.ai
    ```
 
 2. **Install dependencies**
