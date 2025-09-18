@@ -46,11 +46,6 @@ The application uses **4 specialized Lyzr AI agents** to handle different aspect
 - **Output**: Detailed evaluation with scores and reasoning
 - **Features**: Batch processing, PDF text extraction, comprehensive scoring
 
-### 4. RAG (Retrieval Augmented Generation) Agent (`NEXT_PUBLIC_RAG_ID`)
-- **Purpose**: Provides contextual knowledge and answers
-- **Input**: User queries and context
-- **Output**: Relevant information and responses
-- **Features**: Knowledge base integration, context-aware responses
 
 ## 📋 Application Flow
 
@@ -178,7 +173,6 @@ Resume Upload → PDF Processing → AI Evaluation → Results & Feedback
 6. **Lyzr AI Setup**
    - Create agents in Lyzr Studio
    - Get agent IDs and API key
-   - Configure RAG knowledge base
 
 7. **Start the application**
    ```bash
@@ -193,7 +187,6 @@ See `.env.example` for complete configuration. Key variables:
 - **AWS S3**: File storage for resumes
 - **OpenAI**: Text processing and JSON formatting
 - **Lyzr AI**: Agent IDs and API key
-- **RAG**: Knowledge base integration
 
 ## 📁 Project Structure
 
